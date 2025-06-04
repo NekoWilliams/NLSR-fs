@@ -116,6 +116,17 @@ public:
   void
   writeLog();
 
+  const Adjacent*
+  findAdjacentByName(const ndn::Name& adjName) const
+  {
+    for (const auto& adjacent : m_adjList) {
+      if (adjacent.getName() == adjName) {
+        return &adjacent;
+      }
+    }
+    return nullptr;
+  }
+
 public:
   const_iterator
   begin() const

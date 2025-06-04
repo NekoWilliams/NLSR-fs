@@ -366,12 +366,12 @@ addNextHopsToRoutingTable(RoutingTable& rt, const NameMap& map, int sourceRouter
     }
 
     // Find the adjacent router
-    auto adjIt = adjacencies.findAdjacent(*nextHopRouterName);
-    if (adjIt == adjacencies.getAdjList().end()) {
+    auto adj = adjacencies.findAdjacentByName(*nextHopRouterName);
+    if (!adj) {
       continue;
     }
 
-    NextHop nh(adjIt->getFaceUri(), routeCost);
+    NextHop nh(adj->getFaceUri(), routeCost);
     rt.addNextHop(*destRouterName, nh);
   }
 }
