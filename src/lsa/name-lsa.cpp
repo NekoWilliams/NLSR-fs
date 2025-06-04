@@ -22,8 +22,39 @@
 #include "name-lsa.hpp"
 #include "tlv-nlsr.hpp"
 #include <ndn-cxx/encoding/block-helpers.hpp>
+#include <ndn-cxx/encoding/encoding-buffer.hpp>
+#include <ndn-cxx/util/span.hpp>
 
 namespace nlsr {
+
+namespace {
+
+template<ndn::encoding::Tag TAG>
+size_t
+nlsrPrependDoubleBlock(ndn::encoding::EncodingImpl<TAG>& encoder, uint32_t type, double value)
+{
+  size_t totalLength = 0;
+  uint8_t buffer[sizeof(double)];
+  memcpy(buffer, &value, sizeof(double));
+  
+  ndn::span<const uint8_t> bytes(buffer, sizeof(double));
+  totalLength += encoder.prependBytes(bytes);
+  totalLength += encoder.prependVarNumber(sizeof(double));
+  totalLength += encoder.prependVarNumber(type);
+  
+  return totalLength;
+}
+
+double
+extractDoubleFromBlock(const ndn::Block& block)
+{
+  double value = 0.0;
+  const uint8_t* content = block.value();
+  memcpy(&value, content, sizeof(double));
+  return value;
+}
+
+} // anonymous namespace
 
 NameLsa::NameLsa(const ndn::Name& originRouter, uint64_t seqNo,
                  const ndn::time::system_clock::time_point& timepoint,
@@ -53,30 +84,6 @@ NameLsa::getServiceFunctionInfo(const ndn::Name& name) const
   auto it = m_serviceFunctionInfo.find(name);
   return (it != m_serviceFunctionInfo.end()) ? it->second : ServiceFunctionInfo{};
 }
-
-namespace {
-
-template<ndn::encoding::Tag TAG>
-size_t
-nlsrPrependDoubleBlock(ndn::encoding::EncodingImpl<TAG>& encoder, uint32_t type, double value)
-{
-  const uint8_t* valueBytes = reinterpret_cast<const uint8_t*>(&value);
-  size_t totalLength = encoder.prependBytes(valueBytes, sizeof(double));
-  totalLength += encoder.prependVarNumber(sizeof(double));
-  totalLength += encoder.prependVarNumber(type);
-  return totalLength;
-}
-
-double
-extractDoubleFromBlock(const ndn::Block& block)
-{
-  double value = 0.0;
-  const uint8_t* content = block.value();
-  memcpy(&value, content, sizeof(double));
-  return value;
-}
-
-} // anonymous namespace
 
 template<ndn::encoding::Tag TAG>
 size_t
@@ -161,7 +168,6 @@ NameLsa::wireDecode(const ndn::Block& wire)
   NamePrefixList npl;
   for (; val != m_wire.elements_end(); ++val) {
     if (val->type() == nlsr::tlv::PrefixInfo) {
-      //TODO: Implement this structure as a type instead and add decoding
       npl.insert(PrefixInfo(*val));
     }
     else {
@@ -189,9 +195,6 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
   auto nlsa = std::static_pointer_cast<NameLsa>(lsa);
   bool updated = false;
 
-  // Obtain the set difference of the current and the incoming
-  // name prefix sets, and add those.
-
   std::list<ndn::Name> newNames = nlsa->getNpl().getNames();
   std::list<ndn::Name> oldNames = m_npl.getNames();
   std::list<ndn::Name> nameRefToAdd;
@@ -205,7 +208,6 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
     updated = true;
   }
 
-  // Also remove any names that are no longer being advertised.
   std::list<ndn::Name> nameRefToRemove;
   std::list<PrefixInfo> namesToRemove;
   std::set_difference(oldNames.begin(), oldNames.end(), newNames.begin(), newNames.end(),
@@ -213,7 +215,6 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
   for (const auto& name : nameRefToRemove) {
     namesToRemove.push_back(m_npl.getPrefixInfoForName(name));
     removeName(m_npl.getPrefixInfoForName(name));
-
     updated = true;
   }
   return {updated, namesToAdd, namesToRemove};
