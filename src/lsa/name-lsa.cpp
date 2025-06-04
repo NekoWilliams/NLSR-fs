@@ -58,10 +58,9 @@ namespace {
 
 using namespace ndn::encoding;
 
-// 名前空間を明示的に指定してprependDoubleBlock関数を使用
+template<typename TAG>
 size_t
-prependDoubleBlock(ndn::encoding::EncodingImpl<ndn::encoding::Tag>& encoder,
-                  uint32_t type, double value)
+prependDoubleBlock(EncodingImpl<TAG>& encoder, uint32_t type, double value)
 {
   size_t totalLength = encoder.prependByteArray(
     reinterpret_cast<const uint8_t*>(&value), sizeof(double));
@@ -92,8 +91,8 @@ NameLsa::wireEncode(ndn::EncodingImpl<TAG>& block) const
     size_t sfInfoLength = 0;
     
     // Service Function情報をエンコード
-    sfInfoLength += nlsr::prependDoubleBlock(block, nlsr::tlv::ProcessingTime, info.processingTime);
-    sfInfoLength += nlsr::prependDoubleBlock(block, nlsr::tlv::Load, info.load);
+    sfInfoLength += prependDoubleBlock(block, nlsr::tlv::ProcessingTime, info.processingTime);
+    sfInfoLength += prependDoubleBlock(block, nlsr::tlv::Load, info.load);
     sfInfoLength += block.prependVarNumber(info.usageCount);
     sfInfoLength += block.prependVarNumber(nlsr::tlv::UsageCount);
     
@@ -107,7 +106,7 @@ NameLsa::wireEncode(ndn::EncodingImpl<TAG>& block) const
   }
 
   // 名前プレフィックスリストをエンコード
-  for (const auto& name : m_npl) {
+  for (const auto& name : m_npl.getPrefixInfo()) {
     totalLength += name.wireEncode(block);
   }
 

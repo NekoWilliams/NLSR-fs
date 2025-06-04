@@ -49,9 +49,10 @@ enum {
   PrefixInfo                  = 146,
   ServiceFunctionInfo         = 147,
   ProcessingTime             = 148,
-  LoadIndex                  = 149,
-  RecentUsageCount          = 150,
-  LastUpdateTime            = 151
+  Load                      = 149,
+  UsageCount                = 150,
+  LastUpdateTime            = 151,
+  ServiceFunction           = 152
 };
 
 } // namespace nlsr::tlv
