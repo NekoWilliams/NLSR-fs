@@ -33,10 +33,10 @@ namespace nlsr {
  * Service Function情報を格納する構造体
  */
 struct ServiceFunctionInfo {
-  double processingTime{0.0};      // 処理時間（ミリ秒）
-  double loadIndex{0.0};           // 負荷指数（0.0-1.0）
-  uint32_t recentUsageCount{0};    // 使用回数
-  ndn::time::system_clock::TimePoint lastUpdateTime;  // 最終更新時刻
+  double processingTime;  // 処理時間
+  double load;           // 負荷
+  uint32_t usageCount;   // 使用回数
+  ndn::time::system_clock::time_point lastUpdateTime;  // 最終更新時刻（小文字のtime_pointを使用）
 };
 
 /**
