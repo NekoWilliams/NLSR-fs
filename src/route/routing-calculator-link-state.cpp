@@ -252,24 +252,29 @@ class DijkstraResult {
 public:
   std::vector<int> parent;
   std::vector<PathCost> costs;
-  
+
+  explicit
   DijkstraResult(size_t size)
     : parent(size, EMPTY_PARENT)
     , costs(size, PathCost())
   {}
 
+  DijkstraResult(std::vector<int> p, std::vector<PathCost> c)
+    : parent(std::move(p))
+    , costs(std::move(c))
+  {}
+
   int
   getNextHop(int dest, int source) const
   {
-    int nextHop = NO_NEXT_HOP;
-    while (parent[dest] != EMPTY_PARENT) {
-      nextHop = dest;
-      dest = parent[dest];
+    int u = dest;
+    while (parent[u] != source) {
+      if (parent[u] == EMPTY_PARENT) {
+        return NO_NEXT_HOP;
+      }
+      u = parent[u];
     }
-    if (dest != source) {
-      return NO_NEXT_HOP;
-    }
-    return nextHop;
+    return u;
   }
 };
 
@@ -277,17 +282,14 @@ static PathCost
 calculateCombinedCost(double linkCost, const ServiceFunctionInfo& sfInfo,
                      const ConfParameter& confParam)
 {
-  if (linkCost == Adjacent::NON_ADJACENT_COST) {
-    return PathCost();
+  if (linkCost < 0) {
+    return PathCost();  // INF_DISTANCEを返す
   }
-  
-  double functionCost = 0.0;
-  if (sfInfo.processingTime > 0) {
-    functionCost = (sfInfo.processingTime / 1000.0) * confParam.getProcessingWeight() +
-                  sfInfo.loadIndex * confParam.getLoadWeight() +
-                  (sfInfo.recentUsageCount / 100.0) * confParam.getUsageWeight();
-  }
-  
+
+  double functionCost = sfInfo.processingTime * confParam.getProcessingWeight() +
+                       sfInfo.load * confParam.getLoadWeight() +
+                       (sfInfo.usageCount / 100.0) * confParam.getUsageWeight();
+
   return PathCost(linkCost, functionCost);
 }
 
@@ -299,46 +301,38 @@ calculateDijkstraPath(const AdjMatrix& matrix, int sourceRouter)
 {
   size_t nRouters = matrix.size();
   std::vector<int> parent(nRouters, EMPTY_PARENT);
-  // Array where the ith element is the distance to the router with mapping no i.
-  std::vector<double> distance(nRouters, INF_DISTANCE);
-  // Each cell represents the router with that mapping no.
+  std::vector<PathCost> costs(nRouters, PathCost());
   std::vector<int> q(nRouters);
-  for (size_t i = 0 ; i < nRouters; ++i) {
-    q[i] = static_cast<int>(i);
+
+  // 初期化
+  costs[sourceRouter] = PathCost(0, 0);  // 始点のコストを0に設定
+  for (size_t i = 0; i < nRouters; ++i) {
+    q[i] = i;
   }
 
-  size_t head = 0;
-  // Distance to source from source is always 0.
-  distance[sourceRouter] = 0;
-  sortQueueByDistance(q, distance, head);
-  // While we haven't visited every node.
-  while (head < nRouters) {
-    int u = q[head]; // Set u to be the current node pointed to by head.
-    if (distance[u] == INF_DISTANCE) {
-      break; // This can only happen when there are no accessible nodes.
+  // メインループ
+  size_t start = 0;
+  while (start < nRouters) {
+    sortQueueByDistance(q, costs, start);
+    int u = q[start];
+    if (costs[u].totalCost == INF_DISTANCE) {
+      break;
     }
-    // Iterate over the adjacent nodes to u.
+
     for (size_t v = 0; v < nRouters; ++v) {
-      // If the current node is accessible and we haven't visited it yet.
-      if (matrix[u][v] >= 0 && isNotExplored(q, v, head + 1)) {
-        // And if the distance to this node + from this node to v
-        // is less than the distance from our source node to v
-        // that we got when we built the adj LSAs
-        double newDistance = distance[u] + matrix[u][v];
-        if (newDistance < distance[v]) {
-          // Set the new distance
-          distance[v] = newDistance;
-          // Set how we get there.
+      if (matrix[u][v] >= 0 && isNotExplored(q, v, start + 1)) {
+        PathCost newCost(matrix[u][v], 0);  // Service Function情報は後で追加
+        if (newCost.totalCost + costs[u].totalCost < costs[v].totalCost) {
+          costs[v] = PathCost(newCost.linkCost + costs[u].linkCost,
+                             newCost.functionCost + costs[u].functionCost);
           parent[v] = u;
         }
       }
     }
-    // Increment the head position, resort the list by distance from where we are.
-    ++head;
-    sortQueueByDistance(q, distance, head);
+    ++start;
   }
 
-  return DijkstraResult{std::move(parent), std::move(distance)};
+  return DijkstraResult(std::move(parent), std::move(costs));
 }
 
 /**
@@ -346,33 +340,39 @@ calculateDijkstraPath(const AdjMatrix& matrix, int sourceRouter)
  */
 void
 addNextHopsToRoutingTable(RoutingTable& rt, const NameMap& map, int sourceRouter,
-                          const AdjacencyList& adjacencies, const DijkstraResult& dr)
+                         const AdjacencyList& adjacencies, const DijkstraResult& dr)
 {
-  NLSR_LOG_DEBUG("addNextHopsToRoutingTable Called");
-  int nRouters = static_cast<int>(map.size());
+  size_t nRouters = map.size();
 
-  // For each router we have
-  for (int i = 0; i < nRouters; ++i) {
-    if (i == sourceRouter) {
+  for (size_t i = 0; i < nRouters; i++) {
+    if (i == static_cast<size_t>(sourceRouter)) {
       continue;
     }
 
-    // Obtain the next hop that was determined by the algorithm
     int nextHopRouter = dr.getNextHop(i, sourceRouter);
     if (nextHopRouter == NO_NEXT_HOP) {
       continue;
     }
-    // If this router is accessible at all
 
-    // Fetch its distance
-    double routeCost = dr.distance[i];
-    // Fetch its actual name
+    double routeCost = dr.costs[i].totalCost;
     auto nextHopRouterName = map.getRouterNameByMappingNo(nextHopRouter);
-    BOOST_ASSERT(nextHopRouterName.has_value());
-    auto nextHopFace = adjacencies.getAdjacent(*nextHopRouterName).getFaceUri();
-    // Add next hop to routing table
-    NextHop nh(nextHopFace, routeCost);
-    rt.addNextHop(*map.getRouterNameByMappingNo(i), nh);
+    if (!nextHopRouterName) {
+      continue;
+    }
+
+    auto destRouterName = map.getRouterNameByMappingNo(i);
+    if (!destRouterName) {
+      continue;
+    }
+
+    // Find the face ID for this router
+    ndn::FaceUri* faceUri = adjacencies.findAdjacent(*nextHopRouterName);
+    if (faceUri == nullptr) {
+      continue;
+    }
+
+    NextHop nh(*faceUri, routeCost);
+    rt.addNextHop(*destRouterName, nh);
   }
 }
 
