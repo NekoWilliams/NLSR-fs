@@ -60,7 +60,7 @@ using namespace ndn::encoding;
 
 template<ndn::encoding::Tag TAG>
 size_t
-prependDoubleBlock(ndn::encoding::EncodingImpl<TAG>& encoder, uint32_t type, double value)
+nlsrPrependDoubleBlock(ndn::encoding::EncodingImpl<TAG>& encoder, uint32_t type, double value)
 {
   size_t totalLength = encoder.prependByteArray(
     reinterpret_cast<const uint8_t*>(&value), sizeof(double));
@@ -91,8 +91,8 @@ NameLsa::wireEncode(ndn::EncodingImpl<TAG>& block) const
     size_t sfInfoLength = 0;
     
     // Service Function情報をエンコード
-    sfInfoLength += prependDoubleBlock<TAG>(block, nlsr::tlv::ProcessingTime, info.processingTime);
-    sfInfoLength += prependDoubleBlock<TAG>(block, nlsr::tlv::Load, info.load);
+    sfInfoLength += nlsrPrependDoubleBlock<TAG>(block, nlsr::tlv::ProcessingTime, info.processingTime);
+    sfInfoLength += nlsrPrependDoubleBlock<TAG>(block, nlsr::tlv::Load, info.load);
     sfInfoLength += block.prependVarNumber(info.usageCount);
     sfInfoLength += block.prependVarNumber(nlsr::tlv::UsageCount);
     
