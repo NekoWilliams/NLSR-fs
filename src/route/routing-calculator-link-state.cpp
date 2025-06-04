@@ -38,6 +38,63 @@ constexpr int EMPTY_PARENT = -12345;
 constexpr double INF_DISTANCE = 2147483647;
 constexpr int NO_NEXT_HOP = -12345;
 
+// PathCost構造体を最初に定義
+struct PathCost {
+  double linkCost;
+  double functionCost;
+  double totalCost;
+  
+  PathCost(double lc = INF_DISTANCE, double fc = INF_DISTANCE)
+    : linkCost(lc)
+    , functionCost(fc)
+    , totalCost(lc + fc)
+  {}
+};
+
+// DijkstraResult構造体の定義
+class DijkstraResult {
+public:
+  std::vector<int> parent;
+  std::vector<PathCost> costs;
+
+  explicit
+  DijkstraResult(size_t size)
+    : parent(size, EMPTY_PARENT)
+    , costs(size, PathCost())
+  {}
+
+  DijkstraResult(std::vector<int> p, std::vector<PathCost> c)
+    : parent(std::move(p))
+    , costs(std::move(c))
+  {}
+
+  int
+  getNextHop(int dest, int source) const
+  {
+    int u = dest;
+    while (parent[u] != source) {
+      if (parent[u] == EMPTY_PARENT) {
+        return NO_NEXT_HOP;
+      }
+      u = parent[u];
+    }
+    return u;
+  }
+};
+
+// sortQueueByDistanceの定義
+void
+sortQueueByDistance(std::vector<int>& q, const std::vector<PathCost>& costs, size_t start)
+{
+  for (size_t i = start; i < q.size(); ++i) {
+    for (size_t j = i + 1; j < q.size(); ++j) {
+      if (costs[q[j]].totalCost < costs[q[i]].totalCost) {
+        std::swap(q[i], q[j]);
+      }
+    }
+  }
+}
+
 /**
  * @brief Adjacency matrix.
  *
@@ -168,18 +225,6 @@ makeAdjMatrix(const Lsdb& lsdb, NameMap& map)
   return matrix;
 }
 
-void
-sortQueueByDistance(std::vector<int>& q, const std::vector<PathCost>& costs, size_t start)
-{
-  for (size_t i = start; i < q.size(); ++i) {
-    for (size_t j = i + 1; j < q.size(); ++j) {
-      if (costs[q[j]].totalCost < costs[q[i]].totalCost) {
-        std::swap(q[i], q[j]);
-      }
-    }
-  }
-}
-
 bool
 isNotExplored(std::vector<int>& q, int u, size_t start)
 {
@@ -235,48 +280,6 @@ simulateOneNeighbor(AdjMatrix& matrix, int sourceRouter, const Link& accessibleN
     }
   }
 }
-
-struct PathCost {
-  double linkCost;
-  double functionCost;
-  double totalCost;
-  
-  PathCost(double lc = INF_DISTANCE, double fc = INF_DISTANCE)
-    : linkCost(lc)
-    , functionCost(fc)
-    , totalCost(lc + fc)
-  {}
-};
-
-class DijkstraResult {
-public:
-  std::vector<int> parent;
-  std::vector<PathCost> costs;
-
-  explicit
-  DijkstraResult(size_t size)
-    : parent(size, EMPTY_PARENT)
-    , costs(size, PathCost())
-  {}
-
-  DijkstraResult(std::vector<int> p, std::vector<PathCost> c)
-    : parent(std::move(p))
-    , costs(std::move(c))
-  {}
-
-  int
-  getNextHop(int dest, int source) const
-  {
-    int u = dest;
-    while (parent[u] != source) {
-      if (parent[u] == EMPTY_PARENT) {
-        return NO_NEXT_HOP;
-      }
-      u = parent[u];
-    }
-    return u;
-  }
-};
 
 static PathCost
 calculateCombinedCost(double linkCost, const ServiceFunctionInfo& sfInfo,
