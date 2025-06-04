@@ -486,6 +486,24 @@ public:
   void
   writeLog();
 
+  // Service Function関連のパラメータ
+  void
+  setServiceFunctionWeights(double processing, double load, double usage)
+  {
+    m_sfProcessingWeight = processing;
+    m_sfLoadWeight = load;
+    m_sfUsageWeight = usage;
+  }
+
+  double
+  getProcessingWeight() const { return m_sfProcessingWeight; }
+
+  double
+  getLoadWeight() const { return m_sfLoadWeight; }
+
+  double
+  getUsageWeight() const { return m_sfUsageWeight; }
+
 PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   std::string m_confFileName;
   std::string m_confFileNameDynamic;
@@ -540,6 +558,11 @@ PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   ndn::security::SigningInfo m_signingInfo;
   std::unordered_set<std::string> m_certs;
   ndn::KeyChain& m_keyChain;
+
+  // Service Function関連のパラメータ（デフォルト値付き）
+  double m_sfProcessingWeight{0.4};  // 処理時間の重み
+  double m_sfLoadWeight{0.4};        // 負荷の重み
+  double m_sfUsageWeight{0.2};       // 使用回数の重み
 };
 
 } // namespace nlsr

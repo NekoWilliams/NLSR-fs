@@ -24,10 +24,20 @@
 
 #include "lsa.hpp"
 #include "name-prefix-list.hpp"
-
+#include <ndn-cxx/util/time.hpp>
 #include <boost/operators.hpp>
 
 namespace nlsr {
+
+/**
+ * Service Function情報を格納する構造体
+ */
+struct ServiceFunctionInfo {
+  double processingTime{0.0};      // 処理時間（ミリ秒）
+  double loadIndex{0.0};           // 負荷指数（0.0-1.0）
+  uint32_t recentUsageCount{0};    // 使用回数
+  ndn::time::system_clock::TimePoint lastUpdateTime;  // 最終更新時刻
+};
 
 /**
  * @brief Represents an LSA of name prefixes announced by the origin router.
@@ -102,6 +112,9 @@ public:
   std::tuple<bool, std::list<PrefixInfo>, std::list<PrefixInfo>>
   update(const std::shared_ptr<Lsa>& lsa) override;
 
+  void setServiceFunctionInfo(const ndn::Name& name, const ServiceFunctionInfo& info);
+  ServiceFunctionInfo getServiceFunctionInfo(const ndn::Name& name) const;
+
 private:
   void
   print(std::ostream& os) const override;
@@ -119,6 +132,7 @@ private: // non-member operators
 
 private:
   NamePrefixList m_npl;
+  std::map<ndn::Name, ServiceFunctionInfo> m_serviceFunctionInfo;
 };
 
 NDN_CXX_DECLARE_WIRE_ENCODE_INSTANTIATIONS(NameLsa);

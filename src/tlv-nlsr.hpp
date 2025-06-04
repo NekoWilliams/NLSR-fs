@@ -46,7 +46,12 @@ enum {
   NextHop                     = 143,
   RoutingTable                = 144,
   RoutingTableEntry           = 145,
-  PrefixInfo                  = 146
+  PrefixInfo                  = 146,
+  ServiceFunctionInfo         = 147,
+  ProcessingTime             = 148,
+  LoadIndex                  = 149,
+  RecentUsageCount          = 150,
+  LastUpdateTime            = 151
 };
 
 } // namespace nlsr::tlv

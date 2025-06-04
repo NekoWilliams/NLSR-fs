@@ -236,9 +236,28 @@ simulateOneNeighbor(AdjMatrix& matrix, int sourceRouter, const Link& accessibleN
   }
 }
 
-class DijkstraResult
-{
+struct PathCost {
+  double linkCost;
+  double functionCost;
+  double totalCost;
+  
+  PathCost(double lc = INF_DISTANCE, double fc = INF_DISTANCE)
+    : linkCost(lc)
+    , functionCost(fc)
+    , totalCost(lc + fc)
+  {}
+};
+
+class DijkstraResult {
 public:
+  std::vector<int> parent;
+  std::vector<PathCost> costs;
+  
+  DijkstraResult(size_t size)
+    : parent(size, EMPTY_PARENT)
+    , costs(size, PathCost())
+  {}
+
   int
   getNextHop(int dest, int source) const
   {
@@ -248,15 +267,29 @@ public:
       dest = parent[dest];
     }
     if (dest != source) {
-      nextHop = NO_NEXT_HOP;
+      return NO_NEXT_HOP;
     }
     return nextHop;
   }
-
-public:
-  std::vector<int> parent;
-  std::vector<double> distance;
 };
+
+static PathCost
+calculateCombinedCost(double linkCost, const ServiceFunctionInfo& sfInfo,
+                     const ConfParameter& confParam)
+{
+  if (linkCost == Adjacent::NON_ADJACENT_COST) {
+    return PathCost();
+  }
+  
+  double functionCost = 0.0;
+  if (sfInfo.processingTime > 0) {
+    functionCost = (sfInfo.processingTime / 1000.0) * confParam.getProcessingWeight() +
+                  sfInfo.loadIndex * confParam.getLoadWeight() +
+                  (sfInfo.recentUsageCount / 100.0) * confParam.getUsageWeight();
+  }
+  
+  return PathCost(linkCost, functionCost);
+}
 
 /**
  * @brief Compute the shortest path from a source router to every other router.
