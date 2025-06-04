@@ -169,11 +169,11 @@ makeAdjMatrix(const Lsdb& lsdb, NameMap& map)
 }
 
 void
-sortQueueByDistance(std::vector<int>& q, const std::vector<double>& dist, size_t start)
+sortQueueByDistance(std::vector<int>& q, const std::vector<PathCost>& costs, size_t start)
 {
   for (size_t i = start; i < q.size(); ++i) {
     for (size_t j = i + 1; j < q.size(); ++j) {
-      if (dist[q[j]] < dist[q[i]]) {
+      if (costs[q[j]].totalCost < costs[q[i]].totalCost) {
         std::swap(q[i], q[j]);
       }
     }
@@ -365,13 +365,13 @@ addNextHopsToRoutingTable(RoutingTable& rt, const NameMap& map, int sourceRouter
       continue;
     }
 
-    // Find the face ID for this router
-    ndn::FaceUri* faceUri = adjacencies.findAdjacent(*nextHopRouterName);
-    if (faceUri == nullptr) {
+    // Find the adjacent router
+    auto adjIt = adjacencies.findAdjacent(*nextHopRouterName);
+    if (adjIt == adjacencies.getAdjList().end()) {
       continue;
     }
 
-    NextHop nh(*faceUri, routeCost);
+    NextHop nh(adjIt->getFaceUri(), routeCost);
     rt.addNextHop(*destRouterName, nh);
   }
 }
