@@ -43,6 +43,7 @@ using ConfigSection = boost::property_tree::ptree;
 class ConfFileProcessor
 {
 public:
+  explicit
   ConfFileProcessor(ConfParameter& confParam);
 
   /*! \brief Load and parse the configuration file, then populate NLSR.
@@ -112,6 +113,11 @@ private:
    */
   bool
   processConfSectionSecurity(const ConfigSection& section);
+
+  /*! \brief Set options for the service function.
+   */
+  bool
+  processConfSectionServiceFunction(const ConfigSection& section);
 
 private:
   /*! m_confFileName The full path of the configuration file to parse. */

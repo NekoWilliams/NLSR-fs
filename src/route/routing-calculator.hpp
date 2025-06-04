@@ -18,20 +18,42 @@
  * NLSR, e.g., in COPYING.md file.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NLSR_ROUTING_CALCULATOR_HPP
-#define NLSR_ROUTING_CALCULATOR_HPP
+#ifndef NLSR_ROUTE_ROUTING_CALCULATOR_HPP
+#define NLSR_ROUTE_ROUTING_CALCULATOR_HPP
 
-#include "common.hpp"
 #include "lsdb.hpp"
+#include "routing-table.hpp"
+#include "name-map.hpp"
+#include "conf-parameter.hpp"
 
 namespace nlsr {
 
-class NameMap;
-class RoutingTable;
+constexpr double INF_DISTANCE = 2147483647;
+
+/**
+ * @brief Base class for routing table calculation
+ */
+class RoutingCalculator
+{
+protected:
+  // Service Function情報を考慮したコスト計算用の構造体
+  struct PathCost {
+    double linkCost;       // リンクコスト
+    double functionCost;   // ファンクションコスト
+    double totalCost;      // 総合コスト
+    
+    PathCost(double lc = INF_DISTANCE, double fc = INF_DISTANCE)
+      : linkCost(lc)
+      , functionCost(fc)
+      , totalCost(lc + fc)
+    {}
+  };
+};
 
 void
-calculateLinkStateRoutingPath(NameMap& map, RoutingTable& rt, ConfParameter& confParam,
-                              const Lsdb& lsdb);
+calculateLinkStateRoutingPath(NameMap& map, RoutingTable& rt,
+                            ConfParameter& confParam,
+                            const Lsdb& lsdb);
 
 void
 calculateHyperbolicRoutingPath(NameMap& map, RoutingTable& rt, Lsdb& lsdb,
@@ -40,4 +62,4 @@ calculateHyperbolicRoutingPath(NameMap& map, RoutingTable& rt, Lsdb& lsdb,
 
 } // namespace nlsr
 
-#endif // NLSR_ROUTING_CALCULATOR_HPP
+#endif // NLSR_ROUTE_ROUTING_CALCULATOR_HPP

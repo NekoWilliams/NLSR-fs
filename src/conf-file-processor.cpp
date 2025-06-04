@@ -204,6 +204,9 @@ ConfFileProcessor::processSection(const std::string& sectionName, const ConfigSe
   else if (sectionName == "security") {
     ret = processConfSectionSecurity(section);
   }
+  else if (sectionName == "service-function") {
+    ret = processConfSectionServiceFunction(section);
+  }
   else {
     std::cerr << "Unknown configuration section: " << sectionName << std::endl;
   }
@@ -666,6 +669,33 @@ ConfFileProcessor::processConfSectionSecurity(const ConfigSection& section)
   }
 
   return true;
+}
+
+bool
+ConfFileProcessor::processConfSectionServiceFunction(const ConfigSection& section)
+{
+  try {
+    double processingWeight = section.get<double>("processing-weight");
+    double loadWeight = section.get<double>("load-weight");
+    double usageWeight = section.get<double>("usage-weight");
+
+    // 値の検証
+    if (processingWeight < 0.0 || processingWeight > 1.0 ||
+        loadWeight < 0.0 || loadWeight > 1.0 ||
+        usageWeight < 0.0 || usageWeight > 1.0 ||
+        std::abs(processingWeight + loadWeight + usageWeight - 1.0) > 0.0001) {
+      std::cerr << "Invalid weight values in service-function section. "
+                << "Values must be between 0 and 1 and sum to 1.0" << std::endl;
+      return false;
+    }
+
+    m_confParam.setServiceFunctionWeights(processingWeight, loadWeight, usageWeight);
+    return true;
+  }
+  catch (const std::exception& e) {
+    std::cerr << "Error processing service-function section: " << e.what() << std::endl;
+    return false;
+  }
 }
 
 } // namespace nlsr

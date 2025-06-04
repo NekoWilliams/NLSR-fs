@@ -488,21 +488,30 @@ public:
 
   // Service Function関連のパラメータ
   void
-  setServiceFunctionWeights(double processing, double load, double usage)
+  setServiceFunctionWeights(double processingWeight, double loadWeight, double usageWeight)
   {
-    m_sfProcessingWeight = processing;
-    m_sfLoadWeight = load;
-    m_sfUsageWeight = usage;
+    m_processingWeight = processingWeight;
+    m_loadWeight = loadWeight;
+    m_usageWeight = usageWeight;
   }
 
   double
-  getProcessingWeight() const { return m_sfProcessingWeight; }
+  getProcessingWeight() const
+  {
+    return m_processingWeight;
+  }
 
   double
-  getLoadWeight() const { return m_sfLoadWeight; }
+  getLoadWeight() const
+  {
+    return m_loadWeight;
+  }
 
   double
-  getUsageWeight() const { return m_sfUsageWeight; }
+  getUsageWeight() const
+  {
+    return m_usageWeight;
+  }
 
 PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   std::string m_confFileName;
@@ -559,10 +568,10 @@ PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   std::unordered_set<std::string> m_certs;
   ndn::KeyChain& m_keyChain;
 
-  // Service Function関連のパラメータ（デフォルト値付き）
-  double m_sfProcessingWeight{0.4};  // 処理時間の重み
-  double m_sfLoadWeight{0.4};        // 負荷の重み
-  double m_sfUsageWeight{0.2};       // 使用回数の重み
+  // Service Function関連のパラメータ
+  double m_processingWeight = 0.4;  // デフォルト値
+  double m_loadWeight = 0.4;        // デフォルト値
+  double m_usageWeight = 0.2;       // デフォルト値
 };
 
 } // namespace nlsr
