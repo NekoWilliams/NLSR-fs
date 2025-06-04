@@ -55,45 +55,31 @@ NameLsa::getServiceFunctionInfo(const ndn::Name& name) const
 }
 
 namespace {
-// double型の値をTLVブロックにエンコードするヘルパー関数
-template<ndn::encoding::Tag TAG>
+
+using namespace ndn::encoding;
+
+// 名前空間を明示的に指定してprependDoubleBlock関数を使用
 size_t
-prependDoubleBlock(ndn::EncodingImpl<TAG>& encoder, uint32_t type, double value)
+prependDoubleBlock(ndn::encoding::EncodingImpl<ndn::encoding::Tag>& encoder,
+                  uint32_t type, double value)
 {
-  size_t totalLength = 0;
-  
-  int64_t fixedPoint = static_cast<int64_t>(value * 1000000.0);
-  
-  uint8_t buffer[8];
-  for (int i = 0; i < 8; ++i) {
-    buffer[7 - i] = static_cast<uint8_t>(fixedPoint & 0xFF);
-    fixedPoint >>= 8;
-  }
-  
-  totalLength += encoder.prependBytes(buffer, 8);
-  totalLength += encoder.prependVarNumber(8);
+  size_t totalLength = encoder.prependByteArray(
+    reinterpret_cast<const uint8_t*>(&value), sizeof(double));
+  totalLength += encoder.prependVarNumber(sizeof(double));
   totalLength += encoder.prependVarNumber(type);
-  
   return totalLength;
 }
 
-// TLVブロックからdouble型の値をデコードするヘルパー関数
 double
 extractDoubleFromBlock(const ndn::Block& block)
 {
-  if (block.value_size() != 8) {
-    NDN_THROW(ndn::tlv::Error("Double value must be 8 bytes"));
-  }
-  
-  int64_t fixedPoint = 0;
-  const uint8_t* buf = block.value();
-  for (int i = 0; i < 8; ++i) {
-    fixedPoint = (fixedPoint << 8) | buf[i];
-  }
-  
-  return static_cast<double>(fixedPoint) / 1000000.0;
+  double value = 0.0;
+  const uint8_t* content = block.value();
+  memcpy(&value, content, sizeof(double));
+  return value;
 }
-}
+
+} // anonymous namespace
 
 template<ndn::encoding::Tag TAG>
 size_t
@@ -101,21 +87,33 @@ NameLsa::wireEncode(ndn::EncodingImpl<TAG>& block) const
 {
   size_t totalLength = 0;
 
-  // Service Function情報のエンコード
+  // エンコードService Function情報
   for (const auto& [name, info] : m_serviceFunctionInfo) {
-    totalLength += prependDoubleBlock(block, nlsr::tlv::ProcessingTime, info.processingTime);
-    totalLength += prependDoubleBlock(block, nlsr::tlv::LoadIndex, info.loadIndex);
-    totalLength += block.prependVarNumber(info.recentUsageCount);
-    totalLength += block.prependVarNumber(nlsr::tlv::RecentUsageCount);
+    size_t sfInfoLength = 0;
+    
+    // Service Function情報をエンコード
+    sfInfoLength += nlsr::prependDoubleBlock(block, nlsr::tlv::ProcessingTime, info.processingTime);
+    sfInfoLength += nlsr::prependDoubleBlock(block, nlsr::tlv::Load, info.load);
+    sfInfoLength += block.prependVarNumber(info.usageCount);
+    sfInfoLength += block.prependVarNumber(nlsr::tlv::UsageCount);
+    
+    // 名前をエンコード
+    sfInfoLength += name.wireEncode(block);
+    
+    // Service Function情報全体の長さを追加
+    totalLength += sfInfoLength;
+    totalLength += block.prependVarNumber(sfInfoLength);
+    totalLength += block.prependVarNumber(nlsr::tlv::ServiceFunction);
   }
 
-  // 既存のエンコードロジック
-  auto names = m_npl.getPrefixInfo();
-  for (auto it = names.rbegin(); it != names.rend(); ++it) {
-    totalLength += it->wireEncode(block);
+  // 名前プレフィックスリストをエンコード
+  for (const auto& name : m_npl) {
+    totalLength += name.wireEncode(block);
   }
 
+  // LSA共通部分をエンコード
   totalLength += Lsa::wireEncode(block);
+
   totalLength += block.prependVarNumber(totalLength);
   totalLength += block.prependVarNumber(nlsr::tlv::NameLsa);
 
