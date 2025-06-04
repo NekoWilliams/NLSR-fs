@@ -60,8 +60,8 @@ template<ndn::encoding::Tag TAG>
 size_t
 nlsrPrependDoubleBlock(ndn::encoding::EncodingImpl<TAG>& encoder, uint32_t type, double value)
 {
-  size_t totalLength = encoder.prependByteArray(
-    reinterpret_cast<const uint8_t*>(&value), sizeof(double));
+  const uint8_t* valueBytes = reinterpret_cast<const uint8_t*>(&value);
+  size_t totalLength = encoder.prependBytes(valueBytes, sizeof(double));
   totalLength += encoder.prependVarNumber(sizeof(double));
   totalLength += encoder.prependVarNumber(type);
   return totalLength;
