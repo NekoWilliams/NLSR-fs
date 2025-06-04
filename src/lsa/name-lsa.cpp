@@ -56,7 +56,6 @@ NameLsa::getServiceFunctionInfo(const ndn::Name& name) const
 
 namespace {
 
-// ndn::encodingの名前空間を使用しない
 template<ndn::encoding::Tag TAG>
 size_t
 nlsrPrependDoubleBlock(ndn::encoding::EncodingImpl<TAG>& encoder, uint32_t type, double value)
@@ -90,8 +89,8 @@ NameLsa::wireEncode(ndn::EncodingImpl<TAG>& block) const
     size_t sfInfoLength = 0;
     
     // Service Function情報をエンコード
-    sfInfoLength += ::nlsrPrependDoubleBlock(block, nlsr::tlv::ProcessingTime, info.processingTime);
-    sfInfoLength += ::nlsrPrependDoubleBlock(block, nlsr::tlv::Load, info.load);
+    sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::ProcessingTime, info.processingTime);
+    sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::Load, info.load);
     sfInfoLength += block.prependVarNumber(info.usageCount);
     sfInfoLength += block.prependVarNumber(nlsr::tlv::UsageCount);
     
