@@ -36,15 +36,15 @@ SidecarStatsHandler::SidecarStatsHandler(ndn::mgmt::Dispatcher& dispatcher,
 {
   // Register dataset handlers
   dispatcher.addStatusDataset(dataset::SIDECAR_STATS_COMPONENT,
-                             ndn::mgmt::makeAuthorization(),
+                             ndn::mgmt::makeAcceptAllAuthorization(),
                              std::bind(&SidecarStatsHandler::publishSidecarStats, this, _1, _2, _3));
 
   dispatcher.addStatusDataset(dataset::SIDECAR_SERVICE_STATS_COMPONENT,
-                             ndn::mgmt::makeAuthorization(),
+                             ndn::mgmt::makeAcceptAllAuthorization(),
                              std::bind(&SidecarStatsHandler::publishServiceStats, this, _1, _2, _3));
 
   dispatcher.addStatusDataset(dataset::SIDECAR_SFC_STATS_COMPONENT,
-                             ndn::mgmt::makeAuthorization(),
+                             ndn::mgmt::makeAcceptAllAuthorization(),
                              std::bind(&SidecarStatsHandler::publishSfcStats, this, _1, _2, _3));
 }
 
