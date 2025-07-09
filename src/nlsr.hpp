@@ -162,9 +162,7 @@ private:
   void
   terminate(const boost::system::error_code& error, int signalNo);
 
-private:
-  void
-  scheduleDynamicWeightUpdate();
+// Dynamic weight update functionality removed for compatibility
 
 public:
   static inline const ndn::Name LOCALHOST_PREFIX{"/localhost/nlsr"};

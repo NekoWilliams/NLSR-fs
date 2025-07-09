@@ -281,25 +281,26 @@ simulateOneNeighbor(AdjMatrix& matrix, int sourceRouter, const Link& accessibleN
   }
 }
 
-static PathCost
-calculateCombinedCost(double linkCost, const ServiceFunctionInfo& sfInfo,
-                     const ConfParameter& confParam)
-{
-  if (linkCost < 0) {
-    return PathCost();  // INF_DISTANCEを返す
-  }
-
-  // Use dynamic weights if enabled, otherwise use static weights
-  double processingWeight = confParam.getProcessingWeight();
-  double loadWeight = confParam.getLoadWeight();
-  double usageWeight = confParam.getUsageWeight();
-
-  double functionCost = sfInfo.processingTime * processingWeight +
-                       sfInfo.load * loadWeight +
-                       (sfInfo.usageCount / 100.0) * usageWeight;
-
-  return PathCost(linkCost, functionCost);
-}
+// This function is currently unused but kept for future Service Function routing implementation
+// static PathCost
+// calculateCombinedCost(double linkCost, const ServiceFunctionInfo& sfInfo,
+//                      const ConfParameter& confParam)
+// {
+//   if (linkCost < 0) {
+//     return PathCost();  // INF_DISTANCEを返す
+//   }
+// 
+//   // Use dynamic weights if enabled, otherwise use static weights
+//   double processingWeight = confParam.getProcessingWeight();
+//   double loadWeight = confParam.getLoadWeight();
+//   double usageWeight = confParam.getUsageWeight();
+// 
+//   double functionCost = sfInfo.processingTime * processingWeight +
+//                        sfInfo.load * loadWeight +
+//                        (sfInfo.usageCount / 100.0) * usageWeight;
+// 
+//   return PathCost(linkCost, functionCost);
+// }
 
 /**
  * @brief Compute the shortest path from a source router to every other router.

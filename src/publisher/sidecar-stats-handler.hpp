@@ -28,7 +28,6 @@
 #include <string>
 #include <vector>
 #include <map>
-#include <optional>
 
 namespace nlsr {
 
@@ -54,6 +53,12 @@ public:
   SidecarStatsHandler(ndn::mgmt::Dispatcher& dispatcher,
                       const std::string& logPath = "/var/log/sidecar/service.log");
 
+public:
+  /*! \brief Get current sidecar statistics for external access
+  */
+  std::map<std::string, std::string>
+  getCurrentStats() const;
+
 private:
   /*! \brief provide sidecar statistics dataset
   */
@@ -76,34 +81,12 @@ private:
   /*! \brief parse sidecar log file
   */
   std::vector<std::map<std::string, std::string>>
-  parseSidecarLog();
+  parseSidecarLog() const;
 
   /*! \brief get latest statistics
   */
   std::map<std::string, std::string>
-  getLatestStats();
-
-  /*! \brief get dynamic weights based on sidecar stats
-  */
-  std::optional<std::tuple<double, double, double>>
-  getDynamicWeights();
-
-public:
-  /*! \brief Get current sidecar statistics for external access
-  */
-  std::map<std::string, std::string>
-  getCurrentStats() const
-  {
-    return const_cast<SidecarStatsHandler*>(this)->getLatestStats();
-  }
-
-  /*! \brief Get dynamic weights for external access
-  */
-  std::optional<std::tuple<double, double, double>>
-  getCurrentDynamicWeights() const
-  {
-    return const_cast<SidecarStatsHandler*>(this)->getDynamicWeights();
-  }
+  getLatestStats() const;
 
 private:
   std::string m_logPath;

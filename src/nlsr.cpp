@@ -114,10 +114,8 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
     terminate(std::forward<decltype(args)>(args)...);
   });
 
-  // Schedule dynamic weight updates if enabled
-  if (m_confParam.isDynamicWeightingEnabled()) {
-    scheduleDynamicWeightUpdate();
-  }
+  // Sidecar statistics handler is now available for monitoring
+  // Dynamic weight adjustment can be implemented in future versions
 }
 
 void
@@ -385,24 +383,7 @@ Nlsr::terminate(const boost::system::error_code& error, int signalNo)
   m_face.getIoContext().stop();
 }
 
-void
-Nlsr::scheduleDynamicWeightUpdate()
-{
-  // Update weights every 30 seconds based on sidecar statistics
-  m_scheduler.schedule(ndn::time::seconds(30), [this] {
-    auto dynamicWeights = m_sidecarStatsHandler.getDynamicWeights();
-    if (dynamicWeights) {
-      auto [processingWeight, loadWeight, usageWeight] = *dynamicWeights;
-      m_confParam.updateWeightsFromSidecar(processingWeight, loadWeight, usageWeight);
-      NLSR_LOG_DEBUG("Updated weights from sidecar stats: "
-                     << "processing=" << processingWeight
-                     << ", load=" << loadWeight
-                     << ", usage=" << usageWeight);
-    }
-    
-    // Schedule next update
-    scheduleDynamicWeightUpdate();
-  });
-}
+// Dynamic weight update functionality removed for compatibility
+// This can be re-implemented in future versions with proper integration
 
 } // namespace nlsr

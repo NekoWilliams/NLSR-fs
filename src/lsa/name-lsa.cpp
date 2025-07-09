@@ -45,14 +45,7 @@ nlsrPrependDoubleBlock(ndn::encoding::EncodingImpl<TAG>& encoder, uint32_t type,
   return totalLength;
 }
 
-double
-extractDoubleFromBlock(const ndn::Block& block)
-{
-  double value = 0.0;
-  const uint8_t* content = block.value();
-  memcpy(&value, content, sizeof(double));
-  return value;
-}
+// Removed unused function extractDoubleFromBlock
 
 } // anonymous namespace
 

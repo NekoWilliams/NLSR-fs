@@ -27,15 +27,6 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
-#include <algorithm>
-#include <cmath>
-#include <optional>
-#include <tuple>
-#include <vector>
-#include <map>
-#include <string>
-#include <cstdint> // Required for int types
-#include <numeric> // Required for std::accumulate
 
 namespace nlsr {
 
@@ -55,6 +46,12 @@ SidecarStatsHandler::SidecarStatsHandler(ndn::mgmt::Dispatcher& dispatcher,
   dispatcher.addStatusDataset(dataset::SIDECAR_SFC_STATS_COMPONENT,
                              ndn::mgmt::makeAuthorization(),
                              std::bind(&SidecarStatsHandler::publishSfcStats, this, _1, _2, _3));
+}
+
+std::map<std::string, std::string>
+SidecarStatsHandler::getCurrentStats() const
+{
+  return getLatestStats();
 }
 
 void
@@ -124,7 +121,7 @@ SidecarStatsHandler::publishSfcStats(const ndn::Name& topPrefix,
 }
 
 std::vector<std::map<std::string, std::string>>
-SidecarStatsHandler::parseSidecarLog()
+SidecarStatsHandler::parseSidecarLog() const
 {
   std::vector<std::map<std::string, std::string>> logEntries;
   std::ifstream logFile(m_logPath);
@@ -180,7 +177,7 @@ SidecarStatsHandler::parseSidecarLog()
 }
 
 std::map<std::string, std::string>
-SidecarStatsHandler::getLatestStats()
+SidecarStatsHandler::getLatestStats() const
 {
   auto logEntries = parseSidecarLog();
   
@@ -190,69 +187,6 @@ SidecarStatsHandler::getLatestStats()
   
   // Return the latest entry
   return logEntries.back();
-}
-
-std::optional<std::tuple<double, double, double>>
-SidecarStatsHandler::getDynamicWeights()
-{
-  auto logEntries = parseSidecarLog();
-  
-  if (logEntries.size() < 2) {
-    return std::nullopt; // Need at least 2 entries for trend analysis
-  }
-  
-  // Calculate trends from recent entries
-  std::vector<double> processingTimes;
-  std::vector<double> loads;
-  std::vector<int> usageCounts;
-  
-  // Get last 10 entries for trend analysis
-  size_t startIdx = (logEntries.size() > 10) ? logEntries.size() - 10 : 0;
-  
-  for (size_t i = startIdx; i < logEntries.size(); ++i) {
-    const auto& entry = logEntries[i];
-    
-    if (entry.find("in_datasize") != entry.end() && entry.find("out_datasize") != entry.end()) {
-      try {
-        int inSize = std::stoi(entry.at("in_datasize"));
-        int outSize = std::stoi(entry.at("out_datasize"));
-        
-        // Calculate processing time (simplified)
-        double processingTime = static_cast<double>(outSize - inSize) / 1000.0;
-        processingTimes.push_back(std::max(0.0, processingTime));
-        
-        // Calculate load (based on data size ratio)
-        double load = static_cast<double>(inSize) / std::max(1, outSize);
-        loads.push_back(std::min(1.0, load));
-        
-        // Usage count (increment for each entry)
-        usageCounts.push_back(static_cast<int>(i - startIdx + 1));
-      } catch (const std::exception& e) {
-        continue;
-      }
-    }
-  }
-  
-  if (processingTimes.empty() || loads.empty() || usageCounts.empty()) {
-    return std::nullopt;
-  }
-  
-  // Calculate dynamic weights based on trends
-  double avgProcessingTime = std::accumulate(processingTimes.begin(), processingTimes.end(), 0.0) / processingTimes.size();
-  double avgLoad = std::accumulate(loads.begin(), loads.end(), 0.0) / loads.size();
-  double avgUsage = static_cast<double>(std::accumulate(usageCounts.begin(), usageCounts.end(), 0)) / usageCounts.size();
-  
-  // Normalize and calculate weights
-  double total = avgProcessingTime + avgLoad + avgUsage;
-  if (total == 0.0) {
-    return std::nullopt;
-  }
-  
-  double processingWeight = avgProcessingTime / total;
-  double loadWeight = avgLoad / total;
-  double usageWeight = avgUsage / total;
-  
-  return std::make_tuple(processingWeight, loadWeight, usageWeight);
 }
 
 } // namespace nlsr 
