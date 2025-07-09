@@ -32,9 +32,9 @@
 namespace nlsr {
 
 namespace dataset {
-inline const ndn::Name::Component SIDECAR_STATS_COMPONENT{"sidecar-stats"};
-inline const ndn::Name::Component SIDECAR_SERVICE_STATS_COMPONENT{"service-stats"};
-inline const ndn::Name::Component SIDECAR_SFC_STATS_COMPONENT{"sfc-stats"};
+inline const ndn::PartialName SIDECAR_STATS_DATASET{"sidecar-stats"};
+inline const ndn::PartialName SIDECAR_SERVICE_STATS_DATASET{"service-stats"};
+inline const ndn::PartialName SIDECAR_SFC_STATS_DATASET{"sfc-stats"};
 } // namespace dataset
 
 /*!
