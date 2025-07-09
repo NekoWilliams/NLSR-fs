@@ -35,6 +35,7 @@ namespace dataset {
 inline const ndn::PartialName SIDECAR_STATS_DATASET{"sidecar-stats"};
 inline const ndn::PartialName SIDECAR_SERVICE_STATS_DATASET{"service-stats"};
 inline const ndn::PartialName SIDECAR_SFC_STATS_DATASET{"sfc-stats"};
+inline const ndn::PartialName FUNCTION_INFO_DATASET{"function-info"};
 } // namespace dataset
 
 /*!
@@ -77,6 +78,12 @@ private:
   void
   publishSfcStats(const ndn::Name& topPrefix, const ndn::Interest& interest,
                   ndn::mgmt::StatusDatasetContext& context);
+
+  /*! \brief provide function information dataset
+  */
+  void
+  publishFunctionInfo(const ndn::Name& topPrefix, const ndn::Interest& interest,
+                      ndn::mgmt::StatusDatasetContext& context);
 
   /*! \brief parse sidecar log file
   */

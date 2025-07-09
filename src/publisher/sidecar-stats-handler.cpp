@@ -46,6 +46,10 @@ SidecarStatsHandler::SidecarStatsHandler(ndn::mgmt::Dispatcher& dispatcher,
   dispatcher.addStatusDataset(dataset::SIDECAR_SFC_STATS_DATASET,
                              ndn::mgmt::makeAcceptAllAuthorization(),
                              std::bind(&SidecarStatsHandler::publishSfcStats, this, _1, _2, _3));
+
+  dispatcher.addStatusDataset(dataset::FUNCTION_INFO_DATASET,
+                             ndn::mgmt::makeAcceptAllAuthorization(),
+                             std::bind(&SidecarStatsHandler::publishFunctionInfo, this, _1, _2, _3));
 }
 
 std::map<std::string, std::string>
@@ -117,6 +121,28 @@ SidecarStatsHandler::publishSfcStats(const ndn::Name& topPrefix,
   }
 
   context.append(ndn::encoding::makeStringBlock(ndn::tlv::Content, sfcStats));
+  context.end();
+}
+
+void
+SidecarStatsHandler::publishFunctionInfo(const ndn::Name& topPrefix,
+                                         const ndn::Interest& interest,
+                                         ndn::mgmt::StatusDatasetContext& context)
+{
+  std::string functionInfo = "Function Information Dataset\n";
+  functionInfo += "===============================\n";
+  functionInfo += "This dataset provides Service Function information\n";
+  functionInfo += "including processing time, load, and usage count.\n";
+  functionInfo += "\n";
+  functionInfo += "Note: Function information is stored in NameLsa\n";
+  functionInfo += "and can be accessed via 'nlsrc status lsdb/names'\n";
+  functionInfo += "\n";
+  functionInfo += "For detailed statistics, use:\n";
+  functionInfo += "- nlsrc status sidecar-stats\n";
+  functionInfo += "- nlsrc status service-stats\n";
+  functionInfo += "- nlsrc status sfc-stats\n";
+
+  context.append(ndn::encoding::makeStringBlock(ndn::tlv::Content, functionInfo));
   context.end();
 }
 

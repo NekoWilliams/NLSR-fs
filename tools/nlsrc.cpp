@@ -138,6 +138,29 @@ Nlsrc::enableValidator(const std::string& filename)
 }
 
 void
+Nlsrc::getCustomStatus(const std::string& dataset)
+{
+  ndn::Name interestName = m_routerPrefix;
+  interestName.append("nlsr");
+  interestName.append(dataset);
+  
+  ndn::Interest interest(interestName);
+  interest.setInterestLifetime(ndn::time::seconds(4));
+  interest.setMustBeFresh(true);
+  
+  m_face.expressInterest(interest,
+                        std::bind(&Nlsrc::onCustomData, this, _1, _2),
+                        std::bind(&Nlsrc::onTimeout, this, _1, _2),
+                        std::bind(&Nlsrc::onTimeout, this, _1, _2));
+}
+
+void
+Nlsrc::onCustomData(const ndn::Interest& interest, const ndn::Data& data)
+{
+  std::cout << data.getContent().value() << std::endl;
+}
+
+void
 Nlsrc::getStatus(const std::string& command)
 {
   if (command == "lsdb") {
@@ -157,6 +180,7 @@ Nlsrc::getStatus(const std::string& command)
     m_fetchSteps.push_back(std::bind(&Nlsrc::fetchRtables, this));
     m_fetchSteps.push_back(std::bind(&Nlsrc::printAll, this));
   }
+
   runNextStep();
 }
 
@@ -198,11 +222,18 @@ Nlsrc::dispatch(ndn::span<std::string> subcommand)
   }
 
   if (subcommand[0] == "lsdb" || subcommand[0] == "routing" || subcommand[0] == "status") {
-    if (subcommand.size() != 1) {
-      return false;
+    if (subcommand.size() == 1) {
+      getStatus(subcommand[0]);
+      return true;
     }
-    getStatus(subcommand[0]);
-    return true;
+    else if (subcommand.size() == 2) {
+      // Handle dataset-specific requests like "status lsdb/names"
+      if (subcommand[0] == "status") {
+        getCustomStatus(subcommand[1]);
+        return true;
+      }
+    }
+    return false;
   }
   return false;
 }
@@ -324,6 +355,8 @@ Nlsrc::fetchRtables()
   fetchFromRt<nlsr::RoutingTableStatus>([this] (const auto& rts) { this->recordRtable(rts); });
 }
 
+
+
 template<class T>
 void
 Nlsrc::fetchFromLsdb(const ndn::Name::Component& datasetType,
@@ -369,6 +402,8 @@ Nlsrc::fetchFromRt(const std::function<void(const T&)>& recordDataset)
   fetcher->onError.connect(std::bind(&Nlsrc::onTimeout, this, _1, _2));
 }
 
+
+
 template<class T>
 void
 Nlsrc::onFetchSuccess(const ndn::ConstBufferPtr& buf,
@@ -407,6 +442,8 @@ Nlsrc::recordRtable(const nlsr::RoutingTableStatus& rts)
   os << rts;
   m_rtString = os.str();
 }
+
+
 
 void
 Nlsrc::printLsdb()
@@ -451,6 +488,8 @@ Nlsrc::printAll()
   printLsdb();
   printRT();
 }
+
+
 
 } // namespace nlsrc
 

@@ -64,6 +64,12 @@ public:
 
   void
   getStatus(const std::string& command);
+  
+  void
+  getCustomStatus(const std::string& dataset);
+  
+  void
+  onCustomData(const ndn::Interest& interest, const ndn::Data& data);
 
   bool
   dispatch(ndn::span<std::string> subcommand);
@@ -128,9 +134,13 @@ private:
   void
   fetchRtables();
 
+
+
   template<class T>
   void
   fetchFromRt(const std::function<void(const T&)>& recordLsa);
+
+
 
   template<class T>
   void
@@ -143,6 +153,8 @@ private:
   void
   recordRtable(const nlsr::RoutingTableStatus& rts);
 
+
+
   void
   printLsdb();
 
@@ -151,6 +163,8 @@ private:
 
   void
   printAll();
+
+
 
 private:
   std::string m_programName;
