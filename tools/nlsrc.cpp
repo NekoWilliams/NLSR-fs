@@ -150,8 +150,12 @@ Nlsrc::getCustomStatus(const std::string& dataset)
   
   m_face.expressInterest(interest,
                         std::bind(&Nlsrc::onCustomData, this, _1, _2),
-                        std::bind(&Nlsrc::onTimeout, this, _1, _2),
-                        std::bind(&Nlsrc::onTimeout, this, _1, _2));
+                        [this](const ndn::Interest&, const ndn::lp::Nack&) {
+                          this->onTimeout(ERROR_CODE_TIMEOUT, "Nack");
+                        },
+                        [this](const ndn::Interest&) {
+                          this->onTimeout(ERROR_CODE_TIMEOUT, "Timeout");
+                        });
 }
 
 void
