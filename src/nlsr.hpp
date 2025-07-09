@@ -29,6 +29,7 @@
 #include "name-prefix-list.hpp"
 #include "test-access-control.hpp"
 #include "publisher/dataset-interest-handler.hpp"
+#include "publisher/sidecar-stats-handler.hpp"
 #include "route/fib.hpp"
 #include "route/name-prefix-table.hpp"
 #include "route/routing-table.hpp"
@@ -161,6 +162,10 @@ private:
   void
   terminate(const boost::system::error_code& error, int signalNo);
 
+private:
+  void
+  scheduleDynamicWeightUpdate();
+
 public:
   static inline const ndn::Name LOCALHOST_PREFIX{"/localhost/nlsr"};
 
@@ -197,6 +202,7 @@ PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   update::NfdRibCommandProcessor m_nfdRibCommandProcessor;
 
   StatsCollector m_statsCollector;
+  SidecarStatsHandler m_sidecarStatsHandler;
 
 private:
   ndn::nfd::FaceMonitor m_faceMonitor;

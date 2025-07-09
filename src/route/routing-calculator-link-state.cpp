@@ -289,9 +289,14 @@ calculateCombinedCost(double linkCost, const ServiceFunctionInfo& sfInfo,
     return PathCost();  // INF_DISTANCEを返す
   }
 
-  double functionCost = sfInfo.processingTime * confParam.getProcessingWeight() +
-                       sfInfo.load * confParam.getLoadWeight() +
-                       (sfInfo.usageCount / 100.0) * confParam.getUsageWeight();
+  // Use dynamic weights if enabled, otherwise use static weights
+  double processingWeight = confParam.getProcessingWeight();
+  double loadWeight = confParam.getLoadWeight();
+  double usageWeight = confParam.getUsageWeight();
+
+  double functionCost = sfInfo.processingTime * processingWeight +
+                       sfInfo.load * loadWeight +
+                       (sfInfo.usageCount / 100.0) * usageWeight;
 
   return PathCost(linkCost, functionCost);
 }

@@ -77,6 +77,7 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
       m_namePrefixList,
       m_lsdb)
   , m_statsCollector(m_lsdb, m_helloProtocol)
+  , m_sidecarStatsHandler(m_dispatcher, "/var/log/sidecar/service.log")
   , m_faceMonitor(m_face)
   , m_terminateSignals(face.getIoContext(), SIGINT, SIGTERM)
 {
@@ -112,6 +113,11 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
   m_terminateSignals.async_wait([this] (auto&&... args) {
     terminate(std::forward<decltype(args)>(args)...);
   });
+
+  // Schedule dynamic weight updates if enabled
+  if (m_confParam.isDynamicWeightingEnabled()) {
+    scheduleDynamicWeightUpdate();
+  }
 }
 
 void
@@ -377,6 +383,26 @@ Nlsr::terminate(const boost::system::error_code& error, int signalNo)
     return;
   NLSR_LOG_INFO("Caught signal " << signalNo << " (" << ::strsignal(signalNo) << "), exiting...");
   m_face.getIoContext().stop();
+}
+
+void
+Nlsr::scheduleDynamicWeightUpdate()
+{
+  // Update weights every 30 seconds based on sidecar statistics
+  m_scheduler.schedule(ndn::time::seconds(30), [this] {
+    auto dynamicWeights = m_sidecarStatsHandler.getDynamicWeights();
+    if (dynamicWeights) {
+      auto [processingWeight, loadWeight, usageWeight] = *dynamicWeights;
+      m_confParam.updateWeightsFromSidecar(processingWeight, loadWeight, usageWeight);
+      NLSR_LOG_DEBUG("Updated weights from sidecar stats: "
+                     << "processing=" << processingWeight
+                     << ", load=" << loadWeight
+                     << ", usage=" << usageWeight);
+    }
+    
+    // Schedule next update
+    scheduleDynamicWeightUpdate();
+  });
 }
 
 } // namespace nlsr

@@ -513,6 +513,27 @@ public:
     return m_usageWeight;
   }
 
+  // Dynamic weight adjustment methods
+  void
+  updateWeightsFromSidecar(double processingWeight, double loadWeight, double usageWeight)
+  {
+    m_processingWeight = processingWeight;
+    m_loadWeight = loadWeight;
+    m_usageWeight = usageWeight;
+  }
+
+  bool
+  isDynamicWeightingEnabled() const
+  {
+    return m_dynamicWeightingEnabled;
+  }
+
+  void
+  setDynamicWeightingEnabled(bool enabled)
+  {
+    m_dynamicWeightingEnabled = enabled;
+  }
+
 PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   std::string m_confFileName;
   std::string m_confFileNameDynamic;
@@ -572,6 +593,7 @@ PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   double m_processingWeight = 0.4;  // デフォルト値
   double m_loadWeight = 0.4;        // デフォルト値
   double m_usageWeight = 0.2;       // デフォルト値
+  bool m_dynamicWeightingEnabled = false;  // 動的重み付けの有効/無効
 };
 
 } // namespace nlsr

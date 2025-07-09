@@ -690,6 +690,12 @@ ConfFileProcessor::processConfSectionServiceFunction(const ConfigSection& sectio
     }
 
     m_confParam.setServiceFunctionWeights(processingWeight, loadWeight, usageWeight);
+  
+  // Parse dynamic weighting setting
+  bool dynamicWeighting = false;
+  if (section.get<bool>("dynamic-weighting", dynamicWeighting)) {
+    m_confParam.setDynamicWeightingEnabled(dynamicWeighting);
+  }
     return true;
   }
   catch (const std::exception& e) {
