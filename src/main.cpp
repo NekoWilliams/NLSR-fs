@@ -26,7 +26,7 @@
 
 #include <boost/exception/diagnostic_information.hpp>
 #include <iostream>
-#include <ndn-cxx/util/logger.hpp>
+#include <cstdlib>
 
 static void
 printUsage(std::ostream& os, const std::string& programName)
@@ -45,7 +45,7 @@ main(int argc, char** argv)
 {
   // Initialize logging if NDN_LOG environment variable is not set
   if (std::getenv("NDN_LOG") == nullptr) {
-    ndn::util::LoggerFactory::getInstance().setDefaultLevel(ndn::util::LogLevel::INFO);
+    setenv("NDN_LOG", "nlsr.*=INFO", 0);
   }
   
   std::string programName(argv[0]);
