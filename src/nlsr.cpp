@@ -82,6 +82,7 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
   , m_terminateSignals(face.getIoContext(), SIGINT, SIGTERM)
 {
   NLSR_LOG_DEBUG("Initializing Nlsr");
+  NLSR_LOG_INFO("NLSR-fs starting up...");
 
   m_faceMonitor.onNotification.connect(std::bind(&Nlsr::onFaceEventNotification, this, _1));
   m_faceMonitor.start();

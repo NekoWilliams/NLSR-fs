@@ -23,6 +23,7 @@
 #include "adjacent.hpp"
 #include "update/prefix-update-processor.hpp"
 #include "utility/name-helper.hpp"
+#include "logger.hpp"
 
 #include <ndn-cxx/name.hpp>
 #include <ndn-cxx/net/face-uri.hpp>
@@ -36,6 +37,8 @@
 #include <iostream>
 
 namespace nlsr {
+
+INIT_LOGGER(ConfFileProcessor);
 
 namespace fs = std::filesystem;
 
@@ -158,6 +161,10 @@ ConfFileProcessor::processConfFile()
 
   m_confParam.buildRouterAndSyncUserPrefix();
   m_confParam.writeLog();
+  
+  // Add explicit log message to confirm configuration processing
+  NLSR_LOG_INFO("Configuration file processing completed successfully");
+  
   return true;
 }
 

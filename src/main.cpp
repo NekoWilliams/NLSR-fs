@@ -26,6 +26,7 @@
 
 #include <boost/exception/diagnostic_information.hpp>
 #include <iostream>
+#include <ndn-cxx/util/logger.hpp>
 
 static void
 printUsage(std::ostream& os, const std::string& programName)
@@ -42,6 +43,11 @@ printUsage(std::ostream& os, const std::string& programName)
 int
 main(int argc, char** argv)
 {
+  // Initialize logging if NDN_LOG environment variable is not set
+  if (std::getenv("NDN_LOG") == nullptr) {
+    ndn::util::LoggerFactory::getInstance().setDefaultLevel(ndn::util::LogLevel::INFO);
+  }
+  
   std::string programName(argv[0]);
   std::string configFileName("nlsr.conf");
 
@@ -83,6 +89,8 @@ main(int argc, char** argv)
   if (certificate) {
     certStore.insert(*certificate);
   }
+
+  std::cout << "NLSR-fs started successfully. Processing events..." << std::endl;
 
   try {
     face.processEvents();
