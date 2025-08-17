@@ -20,7 +20,7 @@
  */
 
 #include "sidecar-stats-handler.hpp"
-#include "../logger.hpp"
+#include "logger.hpp"
 #include <ndn-cxx/encoding/block.hpp>
 #include <ndn-cxx/encoding/block-helpers.hpp>
 #include <ndn-cxx/encoding/encoding-buffer.hpp>
@@ -30,6 +30,8 @@
 #include <iostream>
 
 namespace nlsr {
+
+INIT_LOGGER(SidecarStatsHandler);
 
 SidecarStatsHandler::SidecarStatsHandler(ndn::mgmt::Dispatcher& dispatcher,
                                          const std::string& logPath)
