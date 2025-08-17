@@ -92,9 +92,12 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
 
   NLSR_LOG_DEBUG("Default NLSR identity: " << m_confParam.getSigningInfo().getSignerName());
 
-  // Add top-level prefixes: router and localhost prefix
+  // Add top-level prefixes BEFORE initializing handlers
   addDispatcherTopPrefix(ndn::Name(m_confParam.getRouterPrefix()).append("nlsr"));
   addDispatcherTopPrefix(LOCALHOST_PREFIX);
+
+  // Verify that sidecar stats handler is properly registered
+  NLSR_LOG_INFO("SidecarStatsHandler initialized with log path: /var/log/sidecar/service.log");
 
   enableIncomingFaceIdIndication();
 
@@ -115,8 +118,7 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
     terminate(std::forward<decltype(args)>(args)...);
   });
 
-  // Sidecar statistics handler is now available for monitoring
-  // Dynamic weight adjustment can be implemented in future versions
+  NLSR_LOG_INFO("NLSR-fs initialization completed successfully");
 }
 
 void

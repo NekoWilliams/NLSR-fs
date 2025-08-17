@@ -60,6 +60,16 @@ public:
   std::map<std::string, std::string>
   getCurrentStats() const;
 
+  /*! \brief Check if the handler is properly registered
+  */
+  bool
+  isRegistered() const { return m_isRegistered; }
+
+  /*! \brief Get the log file path
+  */
+  std::string
+  getLogPath() const { return m_logPath; }
+
 private:
   /*! \brief provide sidecar statistics dataset
   */
@@ -97,6 +107,7 @@ private:
 
 private:
   std::string m_logPath;
+  bool m_isRegistered = false;  // Add registration status flag
 };
 
 } // namespace nlsr

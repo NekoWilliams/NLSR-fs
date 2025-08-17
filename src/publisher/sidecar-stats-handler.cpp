@@ -33,23 +33,38 @@ namespace nlsr {
 SidecarStatsHandler::SidecarStatsHandler(ndn::mgmt::Dispatcher& dispatcher,
                                          const std::string& logPath)
   : m_logPath(logPath)
+  , m_isRegistered(false)
 {
-  // Register dataset handlers
-  dispatcher.addStatusDataset(dataset::SIDECAR_STATS_DATASET,
-                             ndn::mgmt::makeAcceptAllAuthorization(),
-                             std::bind(&SidecarStatsHandler::publishSidecarStats, this, _1, _2, _3));
+  try {
+    // Register dataset handlers with explicit logging
+    NLSR_LOG_INFO("Registering sidecar-stats dataset handler");
+    dispatcher.addStatusDataset(dataset::SIDECAR_STATS_DATASET,
+                               ndn::mgmt::makeAcceptAllAuthorization(),
+                               std::bind(&SidecarStatsHandler::publishSidecarStats, this, _1, _2, _3));
 
-  dispatcher.addStatusDataset(dataset::SIDECAR_SERVICE_STATS_DATASET,
-                             ndn::mgmt::makeAcceptAllAuthorization(),
-                             std::bind(&SidecarStatsHandler::publishServiceStats, this, _1, _2, _3));
+    NLSR_LOG_INFO("Registering service-stats dataset handler");
+    dispatcher.addStatusDataset(dataset::SIDECAR_SERVICE_STATS_DATASET,
+                               ndn::mgmt::makeAcceptAllAuthorization(),
+                               std::bind(&SidecarStatsHandler::publishServiceStats, this, _1, _2, _3));
 
-  dispatcher.addStatusDataset(dataset::SIDECAR_SFC_STATS_DATASET,
-                             ndn::mgmt::makeAcceptAllAuthorization(),
-                             std::bind(&SidecarStatsHandler::publishSfcStats, this, _1, _2, _3));
+    NLSR_LOG_INFO("Registering sfc-stats dataset handler");
+    dispatcher.addStatusDataset(dataset::SIDECAR_SFC_STATS_DATASET,
+                               ndn::mgmt::makeAcceptAllAuthorization(),
+                               std::bind(&SidecarStatsHandler::publishSfcStats, this, _1, _2, _3));
 
-  dispatcher.addStatusDataset(dataset::FUNCTION_INFO_DATASET,
-                             ndn::mgmt::makeAcceptAllAuthorization(),
-                             std::bind(&SidecarStatsHandler::publishFunctionInfo, this, _1, _2, _3));
+    NLSR_LOG_INFO("Registering function-info dataset handler");
+    dispatcher.addStatusDataset(dataset::FUNCTION_INFO_DATASET,
+                               ndn::mgmt::makeAcceptAllAuthorization(),
+                               std::bind(&SidecarStatsHandler::publishFunctionInfo, this, _1, _2, _3));
+
+    m_isRegistered = true;
+    NLSR_LOG_INFO("All sidecar dataset handlers registered successfully");
+  }
+  catch (const std::exception& e) {
+    NLSR_LOG_ERROR("Failed to register sidecar dataset handlers: " << e.what());
+    m_isRegistered = false;
+    throw;
+  }
 }
 
 std::map<std::string, std::string>
@@ -63,17 +78,35 @@ SidecarStatsHandler::publishSidecarStats(const ndn::Name& topPrefix,
                                          const ndn::Interest& interest,
                                          ndn::mgmt::StatusDatasetContext& context)
 {
-  auto stats = getLatestStats();
-  
-  std::string response = "Sidecar Statistics Dataset\n";
-  response += "================================\n";
-  
-  for (const auto& [key, value] : stats) {
-    response += key + ": " + value + "\n";
-  }
+  try {
+    NLSR_LOG_DEBUG("Received sidecar-stats request from: " << interest.getName());
+    
+    auto stats = getLatestStats();
+    
+    std::string response = "Sidecar Statistics Dataset\n";
+    response += "================================\n";
+    
+    if (stats.find("error") != stats.end()) {
+      response += "Error: " + stats["error"] + "\n";
+      response += "Log file path: " + m_logPath + "\n";
+      response += "Registration status: " + (m_isRegistered ? "Registered" : "Not registered") + "\n";
+    } else {
+      for (const auto& [key, value] : stats) {
+        response += key + ": " + value + "\n";
+      }
+    }
 
-  context.append(ndn::encoding::makeStringBlock(ndn::tlv::Content, response));
-  context.end();
+    context.append(ndn::encoding::makeStringBlock(ndn::tlv::Content, response));
+    context.end();
+    
+    NLSR_LOG_DEBUG("Sidecar-stats response sent successfully");
+  }
+  catch (const std::exception& e) {
+    NLSR_LOG_ERROR("Error in publishSidecarStats: " << e.what());
+    std::string errorResponse = "Error: " + std::string(e.what()) + "\n";
+    context.append(ndn::encoding::makeStringBlock(ndn::tlv::Content, errorResponse));
+    context.end();
+  }
 }
 
 void
@@ -150,53 +183,64 @@ std::vector<std::map<std::string, std::string>>
 SidecarStatsHandler::parseSidecarLog() const
 {
   std::vector<std::map<std::string, std::string>> logEntries;
-  std::ifstream logFile(m_logPath);
   
-  if (!logFile.is_open()) {
-    return logEntries;
-  }
-
-  std::string line;
-  while (std::getline(logFile, line)) {
-    try {
-      // Simple JSON parsing for sidecar log format
-      std::map<std::string, std::string> entry;
-      
-      // Remove leading/trailing whitespace and braces
-      line.erase(0, line.find_first_not_of(" \t"));
-      line.erase(line.find_last_not_of(" \t") + 1);
-      if (line.front() == '{' && line.back() == '}') {
-        line = line.substr(1, line.length() - 2);
-      }
-      
-      // Parse key-value pairs
-      std::istringstream iss(line);
-      std::string pair;
-      while (std::getline(iss, pair, ',')) {
-        size_t colonPos = pair.find(':');
-        if (colonPos != std::string::npos) {
-          std::string key = pair.substr(0, colonPos);
-          std::string value = pair.substr(colonPos + 1);
-          
-          // Remove quotes
-          if (key.front() == '"' && key.back() == '"') {
-            key = key.substr(1, key.length() - 2);
-          }
-          if (value.front() == '"' && value.back() == '"') {
-            value = value.substr(1, value.length() - 2);
-          }
-          
-          entry[key] = value;
-        }
-      }
-      
-      if (!entry.empty()) {
-        logEntries.push_back(entry);
-      }
-    } catch (const std::exception& e) {
-      // Skip malformed lines
-      continue;
+  try {
+    std::ifstream logFile(m_logPath);
+    
+    if (!logFile.is_open()) {
+      NLSR_LOG_WARN("Cannot open log file: " << m_logPath);
+      return logEntries;
     }
+
+    std::string line;
+    int lineCount = 0;
+    while (std::getline(logFile, line)) {
+      lineCount++;
+      try {
+        // Simple JSON parsing for sidecar log format
+        std::map<std::string, std::string> entry;
+        
+        // Remove leading/trailing whitespace and braces
+        line.erase(0, line.find_first_not_of(" \t"));
+        line.erase(line.find_last_not_of(" \t") + 1);
+        if (line.front() == '{' && line.back() == '}') {
+          line = line.substr(1, line.length() - 2);
+        }
+        
+        // Parse key-value pairs
+        std::istringstream iss(line);
+        std::string pair;
+        while (std::getline(iss, pair, ',')) {
+          size_t colonPos = pair.find(':');
+          if (colonPos != std::string::npos) {
+            std::string key = pair.substr(0, colonPos);
+            std::string value = pair.substr(colonPos + 1);
+            
+            // Remove quotes
+            if (key.front() == '"' && key.back() == '"') {
+              key = key.substr(1, key.length() - 2);
+            }
+            if (value.front() == '"' && value.back() == '"') {
+              value = value.substr(1, value.length() - 2);
+            }
+            
+            entry[key] = value;
+          }
+        }
+        
+        if (!entry.empty()) {
+          logEntries.push_back(entry);
+        }
+      } catch (const std::exception& e) {
+        NLSR_LOG_WARN("Error parsing line " << lineCount << ": " << e.what());
+        continue;
+      }
+    }
+    
+    NLSR_LOG_DEBUG("Parsed " << logEntries.size() << " log entries from " << m_logPath);
+  }
+  catch (const std::exception& e) {
+    NLSR_LOG_ERROR("Error reading log file: " << e.what());
   }
   
   return logEntries;
