@@ -152,7 +152,7 @@ Nlsrc::getCustomStatus(const std::string& dataset)
   interestName.append(dataset);
   
   ndn::Interest interest(interestName);
-  interest.setInterestLifetime(ndn::time::seconds(4));
+  interest.setInterestLifetime(ndn::time::seconds(10));
   interest.setMustBeFresh(true);
   
   m_face.expressInterest(interest,
