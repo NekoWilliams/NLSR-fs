@@ -76,7 +76,6 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
       m_namePrefixList,
       m_lsdb)
   , m_statsCollector(m_lsdb, m_helloProtocol)
-  , m_sidecarStatsHandler(m_dispatcher, "/var/log/sidecar/service.log")
   , m_faceMonitor(m_face)
   , m_terminateSignals(face.getIoContext(), SIGINT, SIGTERM)
 {
@@ -92,13 +91,19 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
   NLSR_LOG_DEBUG("Default NLSR identity: " << m_confParam.getSigningInfo().getSignerName());
 
   // Add top-level prefixes BEFORE initializing handlers
-  addDispatcherTopPrefix(ndn::Name(m_confParam.getRouterPrefix()).append("nlsr"));
+  // Only add router prefix if it's different from localhost prefix
+  ndn::Name routerPrefix = ndn::Name(m_confParam.getRouterPrefix()).append("nlsr");
+  if (routerPrefix != LOCALHOST_PREFIX) {
+    addDispatcherTopPrefix(routerPrefix);
+  }
   addDispatcherTopPrefix(LOCALHOST_PREFIX);
 
-  // Initialize DatasetInterestHandler AFTER setting top prefixes
+  // Initialize handlers AFTER setting top prefixes
   m_datasetHandler = std::make_unique<DatasetInterestHandler>(m_dispatcher, m_lsdb, m_routingTable);
+  m_sidecarStatsHandler = std::make_unique<SidecarStatsHandler>(m_dispatcher, "/var/log/sidecar/service.log");
 
-  // Verify that sidecar stats handler is properly registered
+  // Verify that handlers are properly registered
+  NLSR_LOG_INFO("DatasetInterestHandler initialized successfully");
   NLSR_LOG_INFO("SidecarStatsHandler initialized with log path: /var/log/sidecar/service.log");
 
   enableIncomingFaceIdIndication();
@@ -167,7 +172,13 @@ Nlsr::addDispatcherTopPrefix(const ndn::Name& topPrefix)
     m_dispatcher.addTopPrefix(topPrefix, false, m_confParam.getSigningInfo());
   }
   catch (const std::exception& e) {
-    NLSR_LOG_ERROR("Error setting top-level prefix in dispatcher: " << e.what());
+    // Check if it's a duplicate prefix error
+    if (std::string(e.what()).find("already been added") != std::string::npos) {
+      NLSR_LOG_WARN("Top-level prefix " << topPrefix << " already added, skipping");
+    } else {
+      NLSR_LOG_ERROR("Error setting top-level prefix in dispatcher: " << e.what());
+      throw; // Re-throw non-duplicate errors
+    }
   }
 }
 

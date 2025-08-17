@@ -201,7 +201,7 @@ PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   update::NfdRibCommandProcessor m_nfdRibCommandProcessor;
 
   StatsCollector m_statsCollector;
-  SidecarStatsHandler m_sidecarStatsHandler;
+  std::unique_ptr<SidecarStatsHandler> m_sidecarStatsHandler;
 
 private:
   ndn::nfd::FaceMonitor m_faceMonitor;
