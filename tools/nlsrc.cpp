@@ -82,6 +82,14 @@ Nlsrc::printUsage() const
            display routing table status
        status
            display all NLSR status (lsdb & routingtable)
+       sidecar-stats
+           display sidecar statistics
+       service-stats
+           display service statistics
+       sfc-stats
+           display SFC statistics
+       function-info
+           display function information
        advertise <name>
            advertise a name prefix through NLSR
        advertise <name> save
@@ -236,6 +244,16 @@ Nlsrc::dispatch(ndn::span<std::string> subcommand)
         getCustomStatus(subcommand[1]);
         return true;
       }
+    }
+    return false;
+  }
+
+  // Handle sidecar-related commands
+  if (subcommand[0] == "sidecar-stats" || subcommand[0] == "service-stats" || 
+      subcommand[0] == "sfc-stats" || subcommand[0] == "function-info") {
+    if (subcommand.size() == 1) {
+      getCustomStatus(subcommand[0]);
+      return true;
     }
     return false;
   }
