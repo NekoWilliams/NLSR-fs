@@ -65,7 +65,6 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
         }
       }))
   , m_dispatcher(m_face, keyChain)
-  , m_datasetHandler(m_dispatcher, m_lsdb, m_routingTable)
   , m_controller(m_face, keyChain)
   , m_faceDatasetController(m_face, keyChain)
   , m_prefixUpdateProcessor(m_dispatcher,
@@ -95,6 +94,9 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
   // Add top-level prefixes BEFORE initializing handlers
   addDispatcherTopPrefix(ndn::Name(m_confParam.getRouterPrefix()).append("nlsr"));
   addDispatcherTopPrefix(LOCALHOST_PREFIX);
+
+  // Initialize DatasetInterestHandler AFTER setting top prefixes
+  m_datasetHandler = std::make_unique<DatasetInterestHandler>(m_dispatcher, m_lsdb, m_routingTable);
 
   // Verify that sidecar stats handler is properly registered
   NLSR_LOG_INFO("SidecarStatsHandler initialized with log path: /var/log/sidecar/service.log");

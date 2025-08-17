@@ -50,6 +50,7 @@
 #include <ndn-cxx/util/scheduler.hpp>
 
 #include <boost/asio/signal_set.hpp>
+#include <memory>
 namespace nlsr {
 
 class Nlsr
@@ -189,7 +190,7 @@ private:
 
 PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   ndn::mgmt::Dispatcher m_dispatcher;
-  DatasetInterestHandler m_datasetHandler;
+  std::unique_ptr<DatasetInterestHandler> m_datasetHandler;
 
 private:
   ndn::nfd::Controller m_controller;
