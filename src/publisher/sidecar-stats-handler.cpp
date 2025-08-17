@@ -20,6 +20,7 @@
  */
 
 #include "sidecar-stats-handler.hpp"
+#include "../logger.hpp"
 #include <ndn-cxx/encoding/block.hpp>
 #include <ndn-cxx/encoding/block-helpers.hpp>
 #include <ndn-cxx/encoding/encoding-buffer.hpp>
@@ -61,7 +62,7 @@ SidecarStatsHandler::SidecarStatsHandler(ndn::mgmt::Dispatcher& dispatcher,
     NLSR_LOG_INFO("All sidecar dataset handlers registered successfully");
   }
   catch (const std::exception& e) {
-    NLSR_LOG_ERROR("Failed to register sidecar dataset handlers: " << e.what());
+    NLSR_LOG_ERROR("Failed to register sidecar dataset handlers: " + std::string(e.what()));
     m_isRegistered = false;
     throw;
   }
@@ -79,7 +80,7 @@ SidecarStatsHandler::publishSidecarStats(const ndn::Name& topPrefix,
                                          ndn::mgmt::StatusDatasetContext& context)
 {
   try {
-    NLSR_LOG_DEBUG("Received sidecar-stats request from: " << interest.getName());
+    NLSR_LOG_DEBUG("Received sidecar-stats request from: " + interest.getName().toUri());
     
     auto stats = getLatestStats();
     
@@ -89,7 +90,7 @@ SidecarStatsHandler::publishSidecarStats(const ndn::Name& topPrefix,
     if (stats.find("error") != stats.end()) {
       response += "Error: " + stats["error"] + "\n";
       response += "Log file path: " + m_logPath + "\n";
-      response += "Registration status: " + (m_isRegistered ? "Registered" : "Not registered") + "\n";
+      response += "Registration status: " + std::string(m_isRegistered ? "Registered" : "Not registered") + "\n";
     } else {
       for (const auto& [key, value] : stats) {
         response += key + ": " + value + "\n";
@@ -102,7 +103,7 @@ SidecarStatsHandler::publishSidecarStats(const ndn::Name& topPrefix,
     NLSR_LOG_DEBUG("Sidecar-stats response sent successfully");
   }
   catch (const std::exception& e) {
-    NLSR_LOG_ERROR("Error in publishSidecarStats: " << e.what());
+    NLSR_LOG_ERROR("Error in publishSidecarStats: " + std::string(e.what()));
     std::string errorResponse = "Error: " + std::string(e.what()) + "\n";
     context.append(ndn::encoding::makeStringBlock(ndn::tlv::Content, errorResponse));
     context.end();
@@ -188,7 +189,7 @@ SidecarStatsHandler::parseSidecarLog() const
     std::ifstream logFile(m_logPath);
     
     if (!logFile.is_open()) {
-      NLSR_LOG_WARN("Cannot open log file: " << m_logPath);
+      NLSR_LOG_WARN("Cannot open log file: " + m_logPath);
       return logEntries;
     }
 
@@ -232,15 +233,15 @@ SidecarStatsHandler::parseSidecarLog() const
           logEntries.push_back(entry);
         }
       } catch (const std::exception& e) {
-        NLSR_LOG_WARN("Error parsing line " << lineCount << ": " << e.what());
+        NLSR_LOG_WARN("Error parsing line " + std::to_string(lineCount) + ": " + std::string(e.what()));
         continue;
       }
     }
     
-    NLSR_LOG_DEBUG("Parsed " << logEntries.size() << " log entries from " << m_logPath);
+    NLSR_LOG_DEBUG("Parsed " + std::to_string(logEntries.size()) + " log entries from " + m_logPath);
   }
   catch (const std::exception& e) {
-    NLSR_LOG_ERROR("Error reading log file: " << e.what());
+    NLSR_LOG_ERROR("Error reading log file: " + std::string(e.what()));
   }
   
   return logEntries;
