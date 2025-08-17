@@ -45,7 +45,7 @@
 
 namespace nlsrc {
 
-const ndn::Name LOCALHOST_PREFIX("/localhost");
+const ndn::Name LOCALHOST_PREFIX("/localhost/nlsr");
 const ndn::PartialName LSDB_SUFFIX("nlsr/lsdb");
 const ndn::PartialName NAME_UPDATE_SUFFIX("nlsr/prefix-update");
 const ndn::PartialName RT_SUFFIX("nlsr/routing-table");
@@ -149,7 +149,6 @@ void
 Nlsrc::getCustomStatus(const std::string& dataset)
 {
   ndn::Name interestName = m_routerPrefix;
-  interestName.append("nlsr");
   interestName.append(dataset);
   
   ndn::Interest interest(interestName);
