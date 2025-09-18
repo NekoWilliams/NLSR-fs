@@ -94,8 +94,13 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
   // Only add router prefix if it's different from localhost prefix
   ndn::Name routerPrefix = ndn::Name(m_confParam.getRouterPrefix()).append("nlsr");
   if (routerPrefix != LOCALHOST_PREFIX) {
+    NLSR_LOG_INFO("Registering router prefix: " << routerPrefix);
     addDispatcherTopPrefix(routerPrefix);
+  } else {
+    NLSR_LOG_INFO("Router prefix same as localhost, using localhost only");
   }
+  
+  NLSR_LOG_INFO("Registering localhost prefix: " << LOCALHOST_PREFIX);
   addDispatcherTopPrefix(LOCALHOST_PREFIX);
 
   // Initialize handlers AFTER setting top prefixes
@@ -166,18 +171,30 @@ Nlsr::registerStrategyForCerts(const ndn::Name& originRouter)
 void
 Nlsr::addDispatcherTopPrefix(const ndn::Name& topPrefix)
 {
-  registerPrefix(topPrefix);
+  // 重複チェック
+  if (m_registeredPrefixes.find(topPrefix) != m_registeredPrefixes.end()) {
+    NLSR_LOG_WARN("Top-level prefix " << topPrefix << " already registered, skipping");
+    return;
+  }
+
   try {
+    // registerPrefixを先に実行してエラーハンドリング
+    registerPrefix(topPrefix);
     // false since we want to have control over the registration process
     m_dispatcher.addTopPrefix(topPrefix, false, m_confParam.getSigningInfo());
+    m_registeredPrefixes.insert(topPrefix); // 登録済みとして記録
+    NLSR_LOG_INFO("Successfully registered top-level prefix: " << topPrefix);
   }
   catch (const std::exception& e) {
-    // Check if it's a duplicate prefix error
-    if (std::string(e.what()).find("already been added") != std::string::npos) {
-      NLSR_LOG_WARN("Top-level prefix " << topPrefix << " already added, skipping");
+    // 重複エラーの場合のみ警告ログを出力して続行
+    if (std::string(e.what()).find("already been added") != std::string::npos ||
+        std::string(e.what()).find("already registered") != std::string::npos) {
+      NLSR_LOG_WARN("Top-level prefix " << topPrefix << " already registered, skipping");
+      m_registeredPrefixes.insert(topPrefix); // 記録に追加
+      return; // エラーを投げずに正常終了
     } else {
       NLSR_LOG_ERROR("Error setting top-level prefix in dispatcher: " << e.what());
-      throw; // Re-throw non-duplicate errors
+      throw; // その他のエラーは再投げ
     }
   }
 }

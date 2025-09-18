@@ -195,6 +195,7 @@ PUBLIC_WITH_TESTS_ELSE_PRIVATE:
 private:
   ndn::nfd::Controller m_controller;
   ndn::nfd::Controller m_faceDatasetController;
+  std::set<ndn::Name> m_registeredPrefixes; // 登録済みプレフィックスを追跡
 
 PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   update::PrefixUpdateProcessor m_prefixUpdateProcessor;
