@@ -67,14 +67,6 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
   , m_dispatcher(m_face, keyChain)
   , m_controller(m_face, keyChain)
   , m_faceDatasetController(m_face, keyChain)
-  , m_prefixUpdateProcessor(m_dispatcher,
-      m_confParam.getPrefixUpdateValidator(),
-      m_namePrefixList,
-      m_lsdb,
-      m_confParam.getConfFileNameDynamic())
-  , m_nfdRibCommandProcessor(m_dispatcher,
-      m_namePrefixList,
-      m_lsdb)
   , m_statsCollector(m_lsdb, m_helloProtocol)
   , m_faceMonitor(m_face)
   , m_terminateSignals(face.getIoContext(), SIGINT, SIGTERM)
@@ -94,6 +86,16 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
   // Dispatcher はトップレベルプレフィックスを 1 つのみ受け付けるため、
   // 管理系のエンドポイントは /localhost/nlsr のみに統一する
   addDispatcherTopPrefix(LOCALHOST_PREFIX);
+
+  // Register control commands AFTER top prefix is set
+  m_prefixUpdateProcessor = std::make_unique<update::PrefixUpdateProcessor>(
+      m_dispatcher,
+      m_confParam.getPrefixUpdateValidator(),
+      m_namePrefixList,
+      m_lsdb,
+      m_confParam.getConfFileNameDynamic());
+  m_nfdRibCommandProcessor = std::make_unique<update::NfdRibCommandProcessor>(
+      m_dispatcher, m_namePrefixList, m_lsdb);
 
   // Initialize handlers AFTER setting top prefixes
   m_datasetHandler = std::make_unique<DatasetInterestHandler>(m_dispatcher, m_lsdb, m_routingTable);

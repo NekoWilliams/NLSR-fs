@@ -198,8 +198,8 @@ private:
   std::set<ndn::Name> m_registeredPrefixes; // 登録済みプレフィックスを追跡
 
 PUBLIC_WITH_TESTS_ELSE_PRIVATE:
-  update::PrefixUpdateProcessor m_prefixUpdateProcessor;
-  update::NfdRibCommandProcessor m_nfdRibCommandProcessor;
+  std::unique_ptr<update::PrefixUpdateProcessor> m_prefixUpdateProcessor;
+  std::unique_ptr<update::NfdRibCommandProcessor> m_nfdRibCommandProcessor;
 
   StatsCollector m_statsCollector;
   std::unique_ptr<SidecarStatsHandler> m_sidecarStatsHandler;
