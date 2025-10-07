@@ -82,12 +82,7 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
 
   NLSR_LOG_DEBUG("Default NLSR identity: " << m_confParam.getSigningInfo().getSignerName());
 
-  // Add top-level prefix BEFORE initializing handlers
-  // Dispatcher はトップレベルプレフィックスを 1 つのみ受け付けるため、
-  // 管理系のエンドポイントは /localhost/nlsr のみに統一する
-  addDispatcherTopPrefix(LOCALHOST_PREFIX);
-
-  // Register control commands AFTER top prefix is set
+  // Register control commands BEFORE adding top prefix
   m_prefixUpdateProcessor = std::make_unique<update::PrefixUpdateProcessor>(
       m_dispatcher,
       m_confParam.getPrefixUpdateValidator(),
@@ -97,9 +92,13 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
   m_nfdRibCommandProcessor = std::make_unique<update::NfdRibCommandProcessor>(
       m_dispatcher, m_namePrefixList, m_lsdb);
 
-  // Initialize handlers AFTER setting top prefixes
+  // Initialize handlers BEFORE adding top prefix
   m_datasetHandler = std::make_unique<DatasetInterestHandler>(m_dispatcher, m_lsdb, m_routingTable);
   m_sidecarStatsHandler = std::make_unique<SidecarStatsHandler>(m_dispatcher, "/var/log/sidecar/service.log");
+
+  // Finally add top-level prefix ONCE after all registrations
+  // Dispatcher はトップレベルプレフィックスを 1 つのみ受け付ける
+  addDispatcherTopPrefix(LOCALHOST_PREFIX);
 
   // Verify that handlers are properly registered
   NLSR_LOG_INFO("DatasetInterestHandler initialized successfully");
