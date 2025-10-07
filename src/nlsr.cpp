@@ -90,17 +90,9 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
 
   NLSR_LOG_DEBUG("Default NLSR identity: " << m_confParam.getSigningInfo().getSignerName());
 
-  // Add top-level prefixes BEFORE initializing handlers
-  // Only add router prefix if it's different from localhost prefix
-  ndn::Name routerPrefix = ndn::Name(m_confParam.getRouterPrefix()).append("nlsr");
-  if (routerPrefix != LOCALHOST_PREFIX) {
-    NLSR_LOG_INFO("Registering router prefix: " << routerPrefix);
-    addDispatcherTopPrefix(routerPrefix);
-  } else {
-    NLSR_LOG_INFO("Router prefix same as localhost, using localhost only");
-  }
-  
-  NLSR_LOG_INFO("Registering localhost prefix: " << LOCALHOST_PREFIX);
+  // Add top-level prefix BEFORE initializing handlers
+  // Dispatcher はトップレベルプレフィックスを 1 つのみ受け付けるため、
+  // 管理系のエンドポイントは /localhost/nlsr のみに統一する
   addDispatcherTopPrefix(LOCALHOST_PREFIX);
 
   // Initialize handlers AFTER setting top prefixes
@@ -188,7 +180,8 @@ Nlsr::addDispatcherTopPrefix(const ndn::Name& topPrefix)
   catch (const std::exception& e) {
     // 重複エラーの場合のみ警告ログを出力して続行
     if (std::string(e.what()).find("already been added") != std::string::npos ||
-        std::string(e.what()).find("already registered") != std::string::npos) {
+        std::string(e.what()).find("already registered") != std::string::npos ||
+        std::string(e.what()).find("Prefix registration failed") != std::string::npos) {
       NLSR_LOG_WARN("Top-level prefix " << topPrefix << " already registered, skipping");
       m_registeredPrefixes.insert(topPrefix); // 記録に追加
       return; // エラーを投げずに正常終了
@@ -207,8 +200,8 @@ Nlsr::registerPrefix(const ndn::Name& prefix)
       NLSR_LOG_DEBUG("Successfully registered prefix " << name);
     },
     [] (const ndn::Name& name, const std::string& reason) {
-      NLSR_LOG_ERROR("Failed to register prefix " << name << " (" << reason << ")");
-      NDN_THROW(Error("Prefix registration failed: " + reason));
+      NLSR_LOG_WARN("Failed to register prefix " << name << " (" << reason << ")");
+      // Don't throw exception, let the caller handle the error
     });
 }
 
