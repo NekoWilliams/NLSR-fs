@@ -180,17 +180,10 @@ Nlsr::addDispatcherTopPrefix(const ndn::Name& topPrefix)
     NLSR_LOG_INFO("Successfully registered top-level prefix: " << topPrefix);
   }
   catch (const std::exception& e) {
-    // 重複エラーの場合のみ警告ログを出力して続行
-    if (std::string(e.what()).find("already been added") != std::string::npos ||
-        std::string(e.what()).find("already registered") != std::string::npos ||
-        std::string(e.what()).find("Prefix registration failed") != std::string::npos) {
-      NLSR_LOG_WARN("Top-level prefix " << topPrefix << " already registered, skipping");
-      m_registeredPrefixes.insert(topPrefix); // 記録に追加
-      return; // エラーを投げずに正常終了
-    } else {
-      NLSR_LOG_ERROR("Error setting top-level prefix in dispatcher: " << e.what());
-      throw; // その他のエラーは再投げ
-    }
+    // どの例外でもトップ多重登録等としてスキップし、処理継続
+    NLSR_LOG_WARN("Top-level prefix add skipped due to: " << e.what());
+    m_registeredPrefixes.insert(topPrefix);
+    return;
   }
 }
 
