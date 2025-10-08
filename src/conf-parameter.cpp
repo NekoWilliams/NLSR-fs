@@ -54,7 +54,7 @@ ConfParameter::ConfParameter(ndn::Face& face, ndn::KeyChain& keyChain,
   , m_adjl()
   , m_npl()
   , m_validator(makeCertificateFetcher(face))
-  , m_prefixUpdateValidator(std::make_unique<ndn::security::CertificateFetcherDirectFetch>(face))
+  , m_prefixUpdateValidator(makeCertificateFetcher(face))
   , m_keyChain(keyChain)
 {
 }
