@@ -94,7 +94,7 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
 
   // Initialize handlers BEFORE adding top prefix
   m_datasetHandler = std::make_unique<DatasetInterestHandler>(m_dispatcher, m_lsdb, m_routingTable);
-  m_sidecarStatsHandler = std::make_unique<SidecarStatsHandler>(m_dispatcher, "/var/log/sidecar/service.log");
+  m_sidecarStatsHandler = std::make_unique<SidecarStatsHandler>(m_dispatcher, m_confParam.getSidecarLogPath());
 
   // Finally add top-level prefix ONCE after all registrations
   // Dispatcher はトップレベルプレフィックスを 1 つのみ受け付ける
@@ -102,7 +102,7 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
 
   // Verify that handlers are properly registered
   NLSR_LOG_INFO("DatasetInterestHandler initialized successfully");
-  NLSR_LOG_INFO("SidecarStatsHandler initialized with log path: /var/log/sidecar/service.log");
+  NLSR_LOG_INFO("SidecarStatsHandler initialized with log path: " << m_confParam.getSidecarLogPath());
 
   enableIncomingFaceIdIndication();
 

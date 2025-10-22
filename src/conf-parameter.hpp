@@ -534,6 +534,19 @@ public:
     m_dynamicWeightingEnabled = enabled;
   }
 
+  // Sidecar log path methods
+  void
+  setSidecarLogPath(const std::string& logPath)
+  {
+    m_sidecarLogPath = logPath;
+  }
+
+  const std::string&
+  getSidecarLogPath() const
+  {
+    return m_sidecarLogPath;
+  }
+
 PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   std::string m_confFileName;
   std::string m_confFileNameDynamic;
@@ -594,6 +607,9 @@ PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   double m_loadWeight = 0.4;        // デフォルト値
   double m_usageWeight = 0.2;       // デフォルト値
   bool m_dynamicWeightingEnabled = false;  // 動的重み付けの有効/無効
+  
+  // Sidecar log path
+  std::string m_sidecarLogPath = "/var/log/sidecar/service.log";  // デフォルト値
 };
 
 } // namespace nlsr

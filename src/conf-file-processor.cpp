@@ -394,6 +394,16 @@ ConfFileProcessor::processConfSectionGeneral(const ConfigSection& section)
     return false;
   }
 
+  // sidecar-log-path
+  try {
+    std::string sidecarLogPath = section.get<std::string>("sidecar-log-path", "/var/log/sidecar/service.log");
+    m_confParam.setSidecarLogPath(sidecarLogPath);
+  }
+  catch (const std::exception& ex) {
+    // sidecar-log-path is optional, use default value
+    m_confParam.setSidecarLogPath("/var/log/sidecar/service.log");
+  }
+
   return true;
 }
 
