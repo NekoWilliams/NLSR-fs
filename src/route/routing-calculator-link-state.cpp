@@ -355,13 +355,10 @@ calculateDijkstraPath(const AdjMatrix& matrix, int sourceRouter,
               
               // Calculate function cost if Service Function info is available
               if (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {
-                double processingWeight = confParam->getProcessingWeight();
-                double loadWeight = confParam->getLoadWeight();
-                double usageWeight = confParam->getUsageWeight();
-                
-                functionCost = sfInfo.processingTime * processingWeight +
-                             sfInfo.load * loadWeight +
-                             (sfInfo.usageCount / 100.0) * usageWeight;
+                // Use calculateCombinedCost to compute the cost
+                PathCost combinedCost = calculateCombinedCost(linkCost, sfInfo, *confParam);
+                linkCost = combinedCost.linkCost;
+                functionCost = combinedCost.functionCost;
               }
             }
           }

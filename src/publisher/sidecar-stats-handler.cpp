@@ -23,7 +23,7 @@
 #include "logger.hpp"
 #include "lsdb.hpp"
 #include "conf-parameter.hpp"
-#include "lsa/name-lsa.hpp"
+#include "lsa/name-lsa.hpp"  // For ServiceFunctionInfo definition
 #include <ndn-cxx/encoding/block.hpp>
 #include <ndn-cxx/encoding/block-helpers.hpp>
 #include <ndn-cxx/encoding/encoding-buffer.hpp>
@@ -442,8 +442,8 @@ SidecarStatsHandler::startLogMonitoring(ndn::Scheduler& scheduler, uint32_t inte
       std::ifstream logFile(m_logPath);
       if (!logFile.is_open()) {
         NLSR_LOG_DEBUG("Cannot open log file for monitoring: " + m_logPath);
-        scheduler.scheduleEvent(ndn::time::milliseconds(intervalMs),
-                                [this, &scheduler, intervalMs]() { startLogMonitoring(scheduler, intervalMs); });
+        scheduler.schedule(ndn::time::milliseconds(intervalMs),
+                          [this, &scheduler, intervalMs]() { startLogMonitoring(scheduler, intervalMs); });
         return;
       }
       
@@ -460,18 +460,18 @@ SidecarStatsHandler::startLogMonitoring(ndn::Scheduler& scheduler, uint32_t inte
       }
       
       // Schedule next check
-      scheduler.scheduleEvent(ndn::time::milliseconds(intervalMs),
-                              [this, &scheduler, intervalMs]() { startLogMonitoring(scheduler, intervalMs); });
+      scheduler.schedule(ndn::time::milliseconds(intervalMs),
+                         [this, &scheduler, intervalMs]() { startLogMonitoring(scheduler, intervalMs); });
     }
     catch (const std::exception& e) {
       NLSR_LOG_ERROR("Error in log monitoring: " + std::string(e.what()));
       // Continue monitoring even on error
-      scheduler.scheduleEvent(ndn::time::milliseconds(intervalMs),
-                              [this, &scheduler, intervalMs]() { startLogMonitoring(scheduler, intervalMs); });
+      scheduler.schedule(ndn::time::milliseconds(intervalMs),
+                        [this, &scheduler, intervalMs]() { startLogMonitoring(scheduler, intervalMs); });
     }
   };
   
-  scheduler.scheduleEvent(ndn::time::milliseconds(intervalMs), monitorFunc);
+  scheduler.schedule(ndn::time::milliseconds(intervalMs), monitorFunc);
   NLSR_LOG_INFO("Started log file monitoring with interval: " << intervalMs << "ms");
 }
 

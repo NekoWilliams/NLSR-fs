@@ -35,6 +35,9 @@ namespace nlsr {
 class Lsdb;
 class ConfParameter;
 
+// Forward declaration for ServiceFunctionInfo
+struct ServiceFunctionInfo;
+
 namespace dataset {
 inline const ndn::PartialName SIDECAR_STATS_DATASET{"sidecar-stats"};
 inline const ndn::PartialName SIDECAR_SERVICE_STATS_DATASET{"service-stats"};
