@@ -194,6 +194,7 @@ SidecarStatsHandler::publishFunctionInfo(const ndn::Name& topPrefix,
 std::vector<std::map<std::string, std::string>>
 SidecarStatsHandler::parseSidecarLog() const
 {
+  NLSR_LOG_DEBUG("parseSidecarLog called for: " << m_logPath);
   std::vector<std::map<std::string, std::string>> logEntries;
   
   try {
@@ -203,6 +204,8 @@ SidecarStatsHandler::parseSidecarLog() const
       NLSR_LOG_WARN("Cannot open log file: " + m_logPath);
       return logEntries;
     }
+    
+    NLSR_LOG_DEBUG("Log file opened successfully");
 
     std::string line;
     int lineCount = 0;
@@ -306,6 +309,12 @@ SidecarStatsHandler::parseSidecarLog() const
     }
     
     NLSR_LOG_DEBUG("Parsed " + std::to_string(logEntries.size()) + " log entries from " + m_logPath);
+    if (logEntries.size() > 0) {
+      NLSR_LOG_DEBUG("First entry has " + std::to_string(logEntries[0].size()) + " keys");
+      for (const auto& [key, value] : logEntries[0]) {
+        NLSR_LOG_DEBUG("  Key: " << key << " = " << value.substr(0, 50));
+      }
+    }
   }
   catch (const std::exception& e) {
     NLSR_LOG_ERROR("Error reading log file: " + std::string(e.what()));
@@ -486,24 +495,35 @@ SidecarStatsHandler::getServiceFunctionPrefix() const
 void
 SidecarStatsHandler::updateNameLsaWithStats()
 {
+  NLSR_LOG_DEBUG("updateNameLsaWithStats called");
+  
   if (!m_lsdb || !m_confParam) {
-    NLSR_LOG_DEBUG("LSDB or ConfParameter not available, skipping NameLSA update");
+    NLSR_LOG_WARN("LSDB or ConfParameter not available, skipping NameLSA update");
     return;
   }
   
   try {
+    NLSR_LOG_DEBUG("Getting latest stats from log file...");
     auto stats = getLatestStats();
     
+    NLSR_LOG_DEBUG("Retrieved " << stats.size() << " stat entries");
+    
     if (stats.find("error") != stats.end()) {
-      NLSR_LOG_DEBUG("No valid statistics available, skipping NameLSA update");
+      NLSR_LOG_DEBUG("No valid statistics available, skipping NameLSA update: " << stats.at("error"));
       return;
     }
     
     // Convert statistics to ServiceFunctionInfo
+    NLSR_LOG_DEBUG("Converting stats to ServiceFunctionInfo...");
     ServiceFunctionInfo sfInfo = convertStatsToServiceFunctionInfo(stats);
+    
+    NLSR_LOG_DEBUG("ServiceFunctionInfo: processingTime=" << sfInfo.processingTime 
+                   << ", load=" << sfInfo.load 
+                   << ", usageCount=" << sfInfo.usageCount);
     
     // Get the router's own NameLSA
     const ndn::Name& routerPrefix = m_confParam->getRouterPrefix();
+    NLSR_LOG_DEBUG("Looking for NameLSA for router: " << routerPrefix);
     auto nameLsa = m_lsdb->findLsa<NameLsa>(routerPrefix);
     
     if (!nameLsa) {
@@ -513,12 +533,15 @@ SidecarStatsHandler::updateNameLsaWithStats()
     
     // Get service function prefix
     ndn::Name servicePrefix = getServiceFunctionPrefix();
+    NLSR_LOG_DEBUG("Service function prefix: " << servicePrefix);
     
     // Update Service Function information
     nameLsa->setServiceFunctionInfo(servicePrefix, sfInfo);
+    NLSR_LOG_DEBUG("Service Function info set in NameLSA");
     
     // Rebuild and install the updated NameLSA
     // This will increment the sequence number and trigger sync
+    NLSR_LOG_DEBUG("Rebuilding and installing NameLSA...");
     m_lsdb->buildAndInstallOwnNameLsa();
     
     NLSR_LOG_INFO("Updated NameLSA with Service Function info: prefix=" << servicePrefix
@@ -534,27 +557,43 @@ SidecarStatsHandler::updateNameLsaWithStats()
 void
 SidecarStatsHandler::startLogMonitoring(ndn::Scheduler& scheduler, uint32_t intervalMs)
 {
+  NLSR_LOG_INFO("startLogMonitoring called with interval: " << intervalMs << "ms, logPath: " << m_logPath);
+  
   if (!m_lsdb || !m_confParam) {
     NLSR_LOG_WARN("LSDB or ConfParameter not available, cannot start log monitoring");
     return;
   }
   
   // Calculate hash of current log file for change detection
-  std::ifstream logFile(m_logPath);
-  std::string content((std::istreambuf_iterator<char>(logFile)),
-                      std::istreambuf_iterator<char>());
-  std::hash<std::string> hasher;
-  m_lastLogHash = std::to_string(hasher(content));
+  try {
+    std::ifstream logFile(m_logPath);
+    if (!logFile.is_open()) {
+      NLSR_LOG_WARN("Cannot open log file for initial hash calculation: " + m_logPath);
+      m_lastLogHash = "";
+    } else {
+      std::string content((std::istreambuf_iterator<char>(logFile)),
+                          std::istreambuf_iterator<char>());
+      std::hash<std::string> hasher;
+      m_lastLogHash = std::to_string(hasher(content));
+      NLSR_LOG_DEBUG("Initial log file hash calculated: " << m_lastLogHash.substr(0, std::min(16UL, m_lastLogHash.size())) << "... (size: " << content.size() << " bytes)");
+    }
+  } catch (const std::exception& e) {
+    NLSR_LOG_ERROR("Error reading log file for initial hash: " + std::string(e.what()));
+    m_lastLogHash = "";
+  }
   
   // Schedule periodic monitoring
-  std::function<void()> monitorFunc = [this, &scheduler, intervalMs]() {
+  // Use shared_ptr to allow recursive scheduling of the same function
+  auto monitorFunc = std::make_shared<std::function<void()>>();
+  *monitorFunc = [this, &scheduler, intervalMs, monitorFunc]() {
+    NLSR_LOG_DEBUG("Log monitoring check triggered");
     try {
       // Read current log file
       std::ifstream logFile(m_logPath);
       if (!logFile.is_open()) {
         NLSR_LOG_DEBUG("Cannot open log file for monitoring: " + m_logPath);
-        scheduler.schedule(ndn::time::milliseconds(intervalMs),
-                          [this, &scheduler, intervalMs]() { startLogMonitoring(scheduler, intervalMs); });
+        // Schedule next check using the same function
+        scheduler.schedule(ndn::time::milliseconds(intervalMs), *monitorFunc);
         return;
       }
       
@@ -563,27 +602,31 @@ SidecarStatsHandler::startLogMonitoring(ndn::Scheduler& scheduler, uint32_t inte
       std::hash<std::string> hasher;
       std::string currentHash = std::to_string(hasher(content));
       
+      std::string lastHashPreview = m_lastLogHash.empty() ? "(empty)" : m_lastLogHash.substr(0, std::min(16UL, m_lastLogHash.size()));
+      NLSR_LOG_DEBUG("Current log file hash: " << currentHash.substr(0, std::min(16UL, currentHash.size())) << "... (size: " << content.size() << " bytes), last hash: " << lastHashPreview << "...");
+      
       // Check if log file has changed
-      if (currentHash != m_lastLogHash) {
-        NLSR_LOG_DEBUG("Log file changed, updating NameLSA");
+      if (m_lastLogHash.empty() || currentHash != m_lastLogHash) {
+        std::string oldHashPreview = m_lastLogHash.empty() ? "(empty)" : m_lastLogHash.substr(0, std::min(16UL, m_lastLogHash.size()));
+        NLSR_LOG_INFO("Log file changed, updating NameLSA (old hash: " << oldHashPreview << "..., new hash: " << currentHash.substr(0, std::min(16UL, currentHash.size())) << "...)");
         m_lastLogHash = currentHash;
         updateNameLsaWithStats();
+      } else {
+        NLSR_LOG_DEBUG("Log file unchanged, skipping update");
       }
       
-      // Schedule next check
-      scheduler.schedule(ndn::time::milliseconds(intervalMs),
-                         [this, &scheduler, intervalMs]() { startLogMonitoring(scheduler, intervalMs); });
+      // Schedule next check using the same function
+      scheduler.schedule(ndn::time::milliseconds(intervalMs), *monitorFunc);
     }
     catch (const std::exception& e) {
       NLSR_LOG_ERROR("Error in log monitoring: " + std::string(e.what()));
       // Continue monitoring even on error
-      scheduler.schedule(ndn::time::milliseconds(intervalMs),
-                        [this, &scheduler, intervalMs]() { startLogMonitoring(scheduler, intervalMs); });
+      scheduler.schedule(ndn::time::milliseconds(intervalMs), *monitorFunc);
     }
   };
   
-  scheduler.schedule(ndn::time::milliseconds(intervalMs), monitorFunc);
-  NLSR_LOG_INFO("Started log file monitoring with interval: " << intervalMs << "ms");
+  scheduler.schedule(ndn::time::milliseconds(intervalMs), *monitorFunc);
+  NLSR_LOG_INFO("Started log file monitoring with interval: " << intervalMs << "ms, logPath: " << m_logPath);
 }
 
 } // namespace nlsr 
