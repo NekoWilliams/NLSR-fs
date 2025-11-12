@@ -34,6 +34,7 @@
 #include <iostream>
 #include <functional>
 #include <cstring>
+#include <ctime>
 
 namespace nlsr {
 
@@ -208,34 +209,90 @@ SidecarStatsHandler::parseSidecarLog() const
     while (std::getline(logFile, line)) {
       lineCount++;
       try {
-        // Simple JSON parsing for sidecar log format
+        // Parse nested JSON structure
+        // Expected format: {"service_call": {"in_time": "...", "out_time": "..."}, "sidecar": {...}}
         std::map<std::string, std::string> entry;
         
-        // Remove leading/trailing whitespace and braces
+        // Remove leading/trailing whitespace
         line.erase(0, line.find_first_not_of(" \t"));
         line.erase(line.find_last_not_of(" \t") + 1);
-        if (line.front() == '{' && line.back() == '}') {
-          line = line.substr(1, line.length() - 2);
+        
+        if (line.empty() || line.front() != '{' || line.back() != '}') {
+          continue;
         }
         
-        // Parse key-value pairs
-        std::istringstream iss(line);
-        std::string pair;
-        while (std::getline(iss, pair, ',')) {
-          size_t colonPos = pair.find(':');
-          if (colonPos != std::string::npos) {
-            std::string key = pair.substr(0, colonPos);
-            std::string value = pair.substr(colonPos + 1);
+        // Extract service_call information
+        size_t scStart = line.find("\"service_call\"");
+        if (scStart != std::string::npos) {
+          size_t scBegin = line.find('{', scStart);
+          size_t scEnd = line.find('}', scBegin);
+          if (scBegin != std::string::npos && scEnd != std::string::npos) {
+            std::string serviceCall = line.substr(scBegin, scEnd - scBegin + 1);
             
-            // Remove quotes
-            if (key.front() == '"' && key.back() == '"') {
-              key = key.substr(1, key.length() - 2);
-            }
-            if (value.front() == '"' && value.back() == '"') {
-              value = value.substr(1, value.length() - 2);
+            // Extract in_time and out_time
+            size_t inTimePos = serviceCall.find("\"in_time\"");
+            size_t outTimePos = serviceCall.find("\"out_time\"");
+            
+            if (inTimePos != std::string::npos) {
+              size_t colonPos = serviceCall.find(':', inTimePos);
+              size_t quoteStart = serviceCall.find('"', colonPos);
+              size_t quoteEnd = serviceCall.find('"', quoteStart + 1);
+              if (quoteStart != std::string::npos && quoteEnd != std::string::npos) {
+                entry["service_call_in_time"] = serviceCall.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+              }
             }
             
-            entry[key] = value;
+            if (outTimePos != std::string::npos) {
+              size_t colonPos = serviceCall.find(':', outTimePos);
+              size_t quoteStart = serviceCall.find('"', colonPos);
+              size_t quoteEnd = serviceCall.find('"', quoteStart + 1);
+              if (quoteStart != std::string::npos && quoteEnd != std::string::npos) {
+                entry["service_call_out_time"] = serviceCall.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+              }
+            }
+          }
+        }
+        
+        // Extract sidecar information
+        size_t sidecarStart = line.find("\"sidecar\"");
+        if (sidecarStart != std::string::npos) {
+          size_t scBegin = line.find('{', sidecarStart);
+          size_t scEnd = line.find('}', scBegin);
+          if (scBegin != std::string::npos && scEnd != std::string::npos) {
+            std::string sidecar = line.substr(scBegin, scEnd - scBegin + 1);
+            
+            // Extract in_time and out_time
+            size_t inTimePos = sidecar.find("\"in_time\"");
+            size_t outTimePos = sidecar.find("\"out_time\"");
+            
+            if (inTimePos != std::string::npos) {
+              size_t colonPos = sidecar.find(':', inTimePos);
+              size_t quoteStart = sidecar.find('"', colonPos);
+              size_t quoteEnd = sidecar.find('"', quoteStart + 1);
+              if (quoteStart != std::string::npos && quoteEnd != std::string::npos) {
+                entry["sidecar_in_time"] = sidecar.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+              }
+            }
+            
+            if (outTimePos != std::string::npos) {
+              size_t colonPos = sidecar.find(':', outTimePos);
+              size_t quoteStart = sidecar.find('"', colonPos);
+              size_t quoteEnd = sidecar.find('"', quoteStart + 1);
+              if (quoteStart != std::string::npos && quoteEnd != std::string::npos) {
+                entry["sidecar_out_time"] = sidecar.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+              }
+            }
+          }
+        }
+        
+        // Extract sfc_time if available
+        size_t sfcTimePos = line.find("\"sfc_time\"");
+        if (sfcTimePos != std::string::npos) {
+          size_t colonPos = line.find(':', sfcTimePos);
+          size_t quoteStart = line.find('"', colonPos);
+          size_t quoteEnd = line.find('"', quoteStart + 1);
+          if (quoteStart != std::string::npos && quoteEnd != std::string::npos) {
+            entry["sfc_time"] = line.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
           }
         }
         
@@ -323,23 +380,77 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo(const std::map<std::strin
   info.usageCount = 0;
   info.lastUpdateTime = ndn::time::system_clock::now();
   
-  // Extract processing time (from service_call or sfc_time)
-  if (stats.find("processing_time") != stats.end()) {
+  // Helper function to parse timestamp string to seconds since epoch
+  auto parseTimestamp = [](const std::string& timestamp) -> double {
+    try {
+      // Format: "2025-11-12 02:58:50.676086"
+      // Parse year, month, day, hour, minute, second, microsecond
+      if (timestamp.length() < 19) {
+        return 0.0;
+      }
+      
+      int year = std::stoi(timestamp.substr(0, 4));
+      int month = std::stoi(timestamp.substr(5, 2));
+      int day = std::stoi(timestamp.substr(8, 2));
+      int hour = std::stoi(timestamp.substr(11, 2));
+      int minute = std::stoi(timestamp.substr(14, 2));
+      int second = std::stoi(timestamp.substr(17, 2));
+      double microsecond = 0.0;
+      
+      if (timestamp.length() > 19) {
+        // Extract microseconds
+        std::string microsecStr = timestamp.substr(20);
+        if (!microsecStr.empty()) {
+          microsecond = std::stod("0." + microsecStr);
+        }
+      }
+      
+      // Convert to seconds since epoch (simplified calculation)
+      // Note: This is a simplified implementation. For production, use proper date/time library
+      std::tm timeinfo = {};
+      timeinfo.tm_year = year - 1900;
+      timeinfo.tm_mon = month - 1;
+      timeinfo.tm_mday = day;
+      timeinfo.tm_hour = hour;
+      timeinfo.tm_min = minute;
+      timeinfo.tm_sec = second;
+      
+      std::time_t time = std::mktime(&timeinfo);
+      return static_cast<double>(time) + microsecond;
+    } catch (const std::exception&) {
+      return 0.0;
+    }
+  };
+  
+  // Extract processing time
+  // Priority: 1) service_call times, 2) sidecar times, 3) direct processing_time
+  if (stats.find("service_call_in_time") != stats.end() && 
+      stats.find("service_call_out_time") != stats.end()) {
+    try {
+      double inTime = parseTimestamp(stats.at("service_call_in_time"));
+      double outTime = parseTimestamp(stats.at("service_call_out_time"));
+      if (inTime > 0.0 && outTime > 0.0) {
+        info.processingTime = outTime - inTime;
+      }
+    } catch (const std::exception& e) {
+      NLSR_LOG_WARN("Failed to calculate processing_time from service_call times: " + std::string(e.what()));
+    }
+  } else if (stats.find("sidecar_in_time") != stats.end() && 
+             stats.find("sidecar_out_time") != stats.end()) {
+    try {
+      double inTime = parseTimestamp(stats.at("sidecar_in_time"));
+      double outTime = parseTimestamp(stats.at("sidecar_out_time"));
+      if (inTime > 0.0 && outTime > 0.0) {
+        info.processingTime = outTime - inTime;
+      }
+    } catch (const std::exception& e) {
+      NLSR_LOG_WARN("Failed to calculate processing_time from sidecar times: " + std::string(e.what()));
+    }
+  } else if (stats.find("processing_time") != stats.end()) {
     try {
       info.processingTime = std::stod(stats.at("processing_time"));
     } catch (const std::exception& e) {
       NLSR_LOG_WARN("Failed to parse processing_time: " + std::string(e.what()));
-    }
-  } else if (stats.find("sfc_time") != stats.end()) {
-    // Calculate from SFC times if available
-    try {
-      if (stats.find("sidecar_in_time") != stats.end() && stats.find("sidecar_out_time") != stats.end()) {
-        double inTime = std::stod(stats.at("sidecar_in_time"));
-        double outTime = std::stod(stats.at("sidecar_out_time"));
-        info.processingTime = outTime - inTime;
-      }
-    } catch (const std::exception& e) {
-      NLSR_LOG_WARN("Failed to calculate processing_time from SFC times: " + std::string(e.what()));
     }
   }
   
