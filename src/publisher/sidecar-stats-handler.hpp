@@ -31,6 +31,10 @@
 
 namespace nlsr {
 
+// Forward declarations
+class Lsdb;
+class ConfParameter;
+
 namespace dataset {
 inline const ndn::PartialName SIDECAR_STATS_DATASET{"sidecar-stats"};
 inline const ndn::PartialName SIDECAR_SERVICE_STATS_DATASET{"service-stats"};
@@ -54,6 +58,12 @@ public:
   SidecarStatsHandler(ndn::mgmt::Dispatcher& dispatcher,
                       const std::string& logPath = "/var/log/sidecar/service.log");
 
+  // Extended constructor with LSDB and ConfParameter references
+  SidecarStatsHandler(ndn::mgmt::Dispatcher& dispatcher,
+                      Lsdb& lsdb,
+                      ConfParameter& confParam,
+                      const std::string& logPath = "/var/log/sidecar/service.log");
+
 public:
   /*! \brief Get current sidecar statistics for external access
   */
@@ -69,6 +79,17 @@ public:
   */
   std::string
   getLogPath() const { return m_logPath; }
+
+  /*! \brief Update NameLSA with latest sidecar statistics
+   */
+  void
+  updateNameLsaWithStats();
+
+  /*! \brief Start monitoring log file for changes (polling-based)
+   *  \param intervalMs Polling interval in milliseconds
+   */
+  void
+  startLogMonitoring(ndn::Scheduler& scheduler, uint32_t intervalMs = 5000);
 
 private:
   /*! \brief provide sidecar statistics dataset
@@ -106,8 +127,22 @@ private:
   getLatestStats() const;
 
 private:
+  /*! \brief Convert statistics map to ServiceFunctionInfo
+   */
+  ServiceFunctionInfo
+  convertStatsToServiceFunctionInfo(const std::map<std::string, std::string>& stats) const;
+
+  /*! \brief Get the prefix name for service function
+   */
+  ndn::Name
+  getServiceFunctionPrefix() const;
+
+private:
   std::string m_logPath;
   bool m_isRegistered = false;  // Add registration status flag
+  Lsdb* m_lsdb = nullptr;  // Pointer to LSDB (optional, for NameLSA updates)
+  ConfParameter* m_confParam = nullptr;  // Pointer to ConfParameter (optional)
+  std::string m_lastLogHash;  // Hash of last processed log content for change detection
 };
 
 } // namespace nlsr

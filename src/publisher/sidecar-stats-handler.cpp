@@ -21,13 +21,19 @@
 
 #include "sidecar-stats-handler.hpp"
 #include "logger.hpp"
+#include "lsdb.hpp"
+#include "conf-parameter.hpp"
+#include "lsa/name-lsa.hpp"
 #include <ndn-cxx/encoding/block.hpp>
 #include <ndn-cxx/encoding/block-helpers.hpp>
 #include <ndn-cxx/encoding/encoding-buffer.hpp>
 #include <ndn-cxx/util/string-helper.hpp>
+#include <ndn-cxx/util/scheduler.hpp>
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <functional>
+#include <cstring>
 
 namespace nlsr {
 
@@ -37,6 +43,8 @@ SidecarStatsHandler::SidecarStatsHandler(ndn::mgmt::Dispatcher& dispatcher,
                                          const std::string& logPath)
   : m_logPath(logPath)
   , m_isRegistered(false)
+  , m_lsdb(nullptr)
+  , m_confParam(nullptr)
 {
   try {
     // Register dataset handlers with explicit logging
@@ -260,6 +268,211 @@ SidecarStatsHandler::getLatestStats() const
   
   // Return the latest entry
   return logEntries.back();
+}
+
+// Extended constructor with LSDB and ConfParameter
+SidecarStatsHandler::SidecarStatsHandler(ndn::mgmt::Dispatcher& dispatcher,
+                                         Lsdb& lsdb,
+                                         ConfParameter& confParam,
+                                         const std::string& logPath)
+  : m_logPath(logPath)
+  , m_isRegistered(false)
+  , m_lsdb(&lsdb)
+  , m_confParam(&confParam)
+{
+  try {
+    // Register dataset handlers with explicit logging
+    NLSR_LOG_INFO("Registering sidecar-stats dataset handler");
+    dispatcher.addStatusDataset(dataset::SIDECAR_STATS_DATASET,
+                               ndn::mgmt::makeAcceptAllAuthorization(),
+                               std::bind(&SidecarStatsHandler::publishSidecarStats, this, _1, _2, _3));
+
+    NLSR_LOG_INFO("Registering service-stats dataset handler");
+    dispatcher.addStatusDataset(dataset::SIDECAR_SERVICE_STATS_DATASET,
+                               ndn::mgmt::makeAcceptAllAuthorization(),
+                               std::bind(&SidecarStatsHandler::publishServiceStats, this, _1, _2, _3));
+
+    NLSR_LOG_INFO("Registering sfc-stats dataset handler");
+    dispatcher.addStatusDataset(dataset::SIDECAR_SFC_STATS_DATASET,
+                               ndn::mgmt::makeAcceptAllAuthorization(),
+                               std::bind(&SidecarStatsHandler::publishSfcStats, this, _1, _2, _3));
+
+    NLSR_LOG_INFO("Registering function-info dataset handler");
+    dispatcher.addStatusDataset(dataset::FUNCTION_INFO_DATASET,
+                               ndn::mgmt::makeAcceptAllAuthorization(),
+                               std::bind(&SidecarStatsHandler::publishFunctionInfo, this, _1, _2, _3));
+
+    m_isRegistered = true;
+    NLSR_LOG_INFO("All sidecar dataset handlers registered successfully");
+  }
+  catch (const std::exception& e) {
+    NLSR_LOG_ERROR("Failed to register sidecar dataset handlers: " + std::string(e.what()));
+    m_isRegistered = false;
+    throw;
+  }
+}
+
+ServiceFunctionInfo
+SidecarStatsHandler::convertStatsToServiceFunctionInfo(const std::map<std::string, std::string>& stats) const
+{
+  ServiceFunctionInfo info;
+  
+  // Initialize with default values
+  info.processingTime = 0.0;
+  info.load = 0.0;
+  info.usageCount = 0;
+  info.lastUpdateTime = ndn::time::system_clock::now();
+  
+  // Extract processing time (from service_call or sfc_time)
+  if (stats.find("processing_time") != stats.end()) {
+    try {
+      info.processingTime = std::stod(stats.at("processing_time"));
+    } catch (const std::exception& e) {
+      NLSR_LOG_WARN("Failed to parse processing_time: " + std::string(e.what()));
+    }
+  } else if (stats.find("sfc_time") != stats.end()) {
+    // Calculate from SFC times if available
+    try {
+      if (stats.find("sidecar_in_time") != stats.end() && stats.find("sidecar_out_time") != stats.end()) {
+        double inTime = std::stod(stats.at("sidecar_in_time"));
+        double outTime = std::stod(stats.at("sidecar_out_time"));
+        info.processingTime = outTime - inTime;
+      }
+    } catch (const std::exception& e) {
+      NLSR_LOG_WARN("Failed to calculate processing_time from SFC times: " + std::string(e.what()));
+    }
+  }
+  
+  // Extract load (if available in stats)
+  if (stats.find("load") != stats.end()) {
+    try {
+      info.load = std::stod(stats.at("load"));
+    } catch (const std::exception& e) {
+      NLSR_LOG_WARN("Failed to parse load: " + std::string(e.what()));
+    }
+  }
+  
+  // Extract usage count
+  if (stats.find("usage_count") != stats.end()) {
+    try {
+      info.usageCount = static_cast<uint32_t>(std::stoul(stats.at("usage_count")));
+    } catch (const std::exception& e) {
+      NLSR_LOG_WARN("Failed to parse usage_count: " + std::string(e.what()));
+    }
+  }
+  
+  return info;
+}
+
+ndn::Name
+SidecarStatsHandler::getServiceFunctionPrefix() const
+{
+  // Default prefix for service function
+  // This can be customized based on configuration
+  return ndn::Name("/relay");
+}
+
+void
+SidecarStatsHandler::updateNameLsaWithStats()
+{
+  if (!m_lsdb || !m_confParam) {
+    NLSR_LOG_DEBUG("LSDB or ConfParameter not available, skipping NameLSA update");
+    return;
+  }
+  
+  try {
+    auto stats = getLatestStats();
+    
+    if (stats.find("error") != stats.end()) {
+      NLSR_LOG_DEBUG("No valid statistics available, skipping NameLSA update");
+      return;
+    }
+    
+    // Convert statistics to ServiceFunctionInfo
+    ServiceFunctionInfo sfInfo = convertStatsToServiceFunctionInfo(stats);
+    
+    // Get the router's own NameLSA
+    const ndn::Name& routerPrefix = m_confParam->getRouterPrefix();
+    auto nameLsa = m_lsdb->findLsa<NameLsa>(routerPrefix);
+    
+    if (!nameLsa) {
+      NLSR_LOG_WARN("Own NameLSA not found, cannot update Service Function info");
+      return;
+    }
+    
+    // Get service function prefix
+    ndn::Name servicePrefix = getServiceFunctionPrefix();
+    
+    // Update Service Function information
+    nameLsa->setServiceFunctionInfo(servicePrefix, sfInfo);
+    
+    // Rebuild and install the updated NameLSA
+    // This will increment the sequence number and trigger sync
+    m_lsdb->buildAndInstallOwnNameLsa();
+    
+    NLSR_LOG_INFO("Updated NameLSA with Service Function info: prefix=" << servicePrefix
+                  << ", processingTime=" << sfInfo.processingTime
+                  << ", load=" << sfInfo.load
+                  << ", usageCount=" << sfInfo.usageCount);
+  }
+  catch (const std::exception& e) {
+    NLSR_LOG_ERROR("Error updating NameLSA with stats: " + std::string(e.what()));
+  }
+}
+
+void
+SidecarStatsHandler::startLogMonitoring(ndn::Scheduler& scheduler, uint32_t intervalMs)
+{
+  if (!m_lsdb || !m_confParam) {
+    NLSR_LOG_WARN("LSDB or ConfParameter not available, cannot start log monitoring");
+    return;
+  }
+  
+  // Calculate hash of current log file for change detection
+  std::ifstream logFile(m_logPath);
+  std::string content((std::istreambuf_iterator<char>(logFile)),
+                      std::istreambuf_iterator<char>());
+  std::hash<std::string> hasher;
+  m_lastLogHash = std::to_string(hasher(content));
+  
+  // Schedule periodic monitoring
+  std::function<void()> monitorFunc = [this, &scheduler, intervalMs]() {
+    try {
+      // Read current log file
+      std::ifstream logFile(m_logPath);
+      if (!logFile.is_open()) {
+        NLSR_LOG_DEBUG("Cannot open log file for monitoring: " + m_logPath);
+        scheduler.scheduleEvent(ndn::time::milliseconds(intervalMs),
+                                [this, &scheduler, intervalMs]() { startLogMonitoring(scheduler, intervalMs); });
+        return;
+      }
+      
+      std::string content((std::istreambuf_iterator<char>(logFile)),
+                          std::istreambuf_iterator<char>());
+      std::hash<std::string> hasher;
+      std::string currentHash = std::to_string(hasher(content));
+      
+      // Check if log file has changed
+      if (currentHash != m_lastLogHash) {
+        NLSR_LOG_DEBUG("Log file changed, updating NameLSA");
+        m_lastLogHash = currentHash;
+        updateNameLsaWithStats();
+      }
+      
+      // Schedule next check
+      scheduler.scheduleEvent(ndn::time::milliseconds(intervalMs),
+                              [this, &scheduler, intervalMs]() { startLogMonitoring(scheduler, intervalMs); });
+    }
+    catch (const std::exception& e) {
+      NLSR_LOG_ERROR("Error in log monitoring: " + std::string(e.what()));
+      // Continue monitoring even on error
+      scheduler.scheduleEvent(ndn::time::milliseconds(intervalMs),
+                              [this, &scheduler, intervalMs]() { startLogMonitoring(scheduler, intervalMs); });
+    }
+  };
+  
+  scheduler.scheduleEvent(ndn::time::milliseconds(intervalMs), monitorFunc);
+  NLSR_LOG_INFO("Started log file monitoring with interval: " << intervalMs << "ms");
 }
 
 } // namespace nlsr 

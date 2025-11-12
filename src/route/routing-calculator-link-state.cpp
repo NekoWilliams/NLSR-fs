@@ -26,6 +26,9 @@
 #include "adjacent.hpp"
 #include "logger.hpp"
 #include "nlsr.hpp"
+#include "lsa/name-lsa.hpp"
+#include "lsdb.hpp"
+#include "conf-parameter.hpp"
 
 #include <boost/multi_array.hpp>
 
@@ -281,32 +284,39 @@ simulateOneNeighbor(AdjMatrix& matrix, int sourceRouter, const Link& accessibleN
   }
 }
 
-// This function is currently unused but kept for future Service Function routing implementation
-// static PathCost
-// calculateCombinedCost(double linkCost, const ServiceFunctionInfo& sfInfo,
-//                      const ConfParameter& confParam)
-// {
-//   if (linkCost < 0) {
-//     return PathCost();  // INF_DISTANCEを返す
-//   }
-// 
-//   // Use dynamic weights if enabled, otherwise use static weights
-//   double processingWeight = confParam.getProcessingWeight();
-//   double loadWeight = confParam.getLoadWeight();
-//   double usageWeight = confParam.getUsageWeight();
-// 
-//   double functionCost = sfInfo.processingTime * processingWeight +
-//                        sfInfo.load * loadWeight +
-//                        (sfInfo.usageCount / 100.0) * usageWeight;
-// 
-//   return PathCost(linkCost, functionCost);
-// }
+// Calculate combined cost including Service Function information
+static PathCost
+calculateCombinedCost(double linkCost, const ServiceFunctionInfo& sfInfo,
+                     const ConfParameter& confParam)
+{
+  if (linkCost < 0) {
+    return PathCost();  // INF_DISTANCEを返す
+  }
+ 
+  // Use dynamic weights if enabled, otherwise use static weights
+  double processingWeight = confParam.getProcessingWeight();
+  double loadWeight = confParam.getLoadWeight();
+  double usageWeight = confParam.getUsageWeight();
+ 
+  double functionCost = sfInfo.processingTime * processingWeight +
+                       sfInfo.load * loadWeight +
+                       (sfInfo.usageCount / 100.0) * usageWeight;
+ 
+  return PathCost(linkCost, functionCost);
+}
 
 /**
  * @brief Compute the shortest path from a source router to every other router.
+ * @param matrix Adjacency matrix
+ * @param sourceRouter Source router index
+ * @param lsdb LSDB for accessing NameLSAs with Service Function info
+ * @param map NameMap for router name lookup
+ * @param confParam Configuration parameters for weight calculation
  */
 DijkstraResult
-calculateDijkstraPath(const AdjMatrix& matrix, int sourceRouter)
+calculateDijkstraPath(const AdjMatrix& matrix, int sourceRouter,
+                      const Lsdb* lsdb = nullptr, const NameMap* map = nullptr,
+                      const ConfParameter* confParam = nullptr)
 {
   size_t nRouters = matrix.size();
   std::vector<int> parent(nRouters, EMPTY_PARENT);
@@ -330,7 +340,34 @@ calculateDijkstraPath(const AdjMatrix& matrix, int sourceRouter)
 
     for (size_t v = 0; v < nRouters; ++v) {
       if (matrix[u][v] >= 0 && isNotExplored(q, v, start + 1)) {
-        PathCost newCost(matrix[u][v], 0);  // Service Function情報は後で追加
+        double linkCost = matrix[u][v];
+        double functionCost = 0.0;
+        
+        // Get Service Function information if available
+        if (lsdb && map && confParam) {
+          auto destRouterName = map->getRouterNameByMappingNo(v);
+          if (destRouterName) {
+            auto nameLsa = lsdb->findLsa<NameLsa>(*destRouterName);
+            if (nameLsa) {
+              // Get Service Function info for default prefix (/relay)
+              ndn::Name servicePrefix("/relay");
+              ServiceFunctionInfo sfInfo = nameLsa->getServiceFunctionInfo(servicePrefix);
+              
+              // Calculate function cost if Service Function info is available
+              if (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {
+                double processingWeight = confParam->getProcessingWeight();
+                double loadWeight = confParam->getLoadWeight();
+                double usageWeight = confParam->getUsageWeight();
+                
+                functionCost = sfInfo.processingTime * processingWeight +
+                             sfInfo.load * loadWeight +
+                             (sfInfo.usageCount / 100.0) * usageWeight;
+              }
+            }
+          }
+        }
+        
+        PathCost newCost(linkCost, functionCost);
         if (newCost.totalCost + costs[u].totalCost < costs[v].totalCost) {
           costs[v] = PathCost(newCost.linkCost + costs[u].linkCost,
                              newCost.functionCost + costs[u].functionCost);
@@ -404,7 +441,7 @@ calculateLinkStateRoutingPath(NameMap& map, RoutingTable& rt, ConfParameter& con
 
   if (confParam.getMaxFacesPerPrefix() == 1) {
     // In the single path case we can simply run Dijkstra's algorithm.
-    auto dr = calculateDijkstraPath(matrix, *sourceRouter);
+    auto dr = calculateDijkstraPath(matrix, *sourceRouter, &lsdb, &map, &confParam);
     // Inform the routing table of the new next hops.
     addNextHopsToRoutingTable(rt, map, *sourceRouter, confParam.getAdjacencyList(), dr);
   }
@@ -417,7 +454,7 @@ calculateLinkStateRoutingPath(NameMap& map, RoutingTable& rt, ConfParameter& con
       simulateOneNeighbor(matrix, *sourceRouter, link);
       NLSR_LOG_DEBUG((PrintAdjMatrix{matrix, map}));
       // Do Dijkstra's algorithm using the current neighbor as your start.
-      auto dr = calculateDijkstraPath(matrix, *sourceRouter);
+      auto dr = calculateDijkstraPath(matrix, *sourceRouter, &lsdb, &map, &confParam);
       // Update the routing table with the calculations.
       addNextHopsToRoutingTable(rt, map, *sourceRouter, confParam.getAdjacencyList(), dr);
     }

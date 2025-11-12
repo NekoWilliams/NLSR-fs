@@ -94,6 +94,20 @@ Lsdb::buildAndInstallOwnNameLsa()
 {
   NameLsa nameLsa(m_thisRouterPrefix, m_sequencingManager.getNameLsaSeq() + 1,
                   getLsaExpirationTimePoint(), m_confParam.getNamePrefixList());
+  
+  // Preserve Service Function information from existing NameLSA
+  auto existingNameLsa = findLsa<NameLsa>(m_thisRouterPrefix);
+  if (existingNameLsa) {
+    // Copy Service Function information from existing NameLSA
+    // Note: This is a simplified approach - in a full implementation,
+    // we would iterate through all Service Function entries
+    ndn::Name servicePrefix("/relay");
+    ServiceFunctionInfo sfInfo = existingNameLsa->getServiceFunctionInfo(servicePrefix);
+    if (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {
+      nameLsa.setServiceFunctionInfo(servicePrefix, sfInfo);
+    }
+  }
+  
   m_sequencingManager.increaseNameLsaSeq();
   m_sequencingManager.writeSeqNoToFile();
   m_sync.publishRoutingUpdate(Lsa::Type::NAME, m_sequencingManager.getNameLsaSeq());

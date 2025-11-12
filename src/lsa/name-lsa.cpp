@@ -24,6 +24,8 @@
 #include <ndn-cxx/encoding/block-helpers.hpp>
 #include <ndn-cxx/encoding/encoding-buffer.hpp>
 #include <ndn-cxx/util/span.hpp>
+#include <vector>
+#include <algorithm>
 
 namespace nlsr {
 
@@ -159,12 +161,80 @@ NameLsa::wireDecode(const ndn::Block& wire)
   }
 
   NamePrefixList npl;
+  m_serviceFunctionInfo.clear();  // Clear existing Service Function info
+  
   for (; val != m_wire.elements_end(); ++val) {
     if (val->type() == nlsr::tlv::PrefixInfo) {
       npl.insert(PrefixInfo(*val));
     }
+    else if (val->type() == nlsr::tlv::ServiceFunction) {
+      // Decode Service Function information
+      val->parse();
+      
+      ndn::Name serviceName;
+      ServiceFunctionInfo sfInfo;
+      
+      // Initialize with default values
+      sfInfo.processingTime = 0.0;
+      sfInfo.load = 0.0;
+      sfInfo.usageCount = 0;
+      sfInfo.lastUpdateTime = ndn::time::system_clock::now();
+      
+      // Parse Service Function TLV elements
+      // Note: Due to prepend encoding, elements are in reverse order
+      // We need to iterate in reverse or collect all elements first
+      std::vector<ndn::Block> elements;
+      for (auto sfVal = val->elements_begin(); sfVal != val->elements_end(); ++sfVal) {
+        elements.push_back(*sfVal);
+      }
+      
+      // Process elements in reverse order (to match encoding order)
+      for (auto it = elements.rbegin(); it != elements.rend(); ++it) {
+        if (it->type() == ndn::tlv::Name) {
+          // Service function name
+          serviceName.wireDecode(*it);
+        }
+        else if (it->type() == nlsr::tlv::ProcessingTime) {
+          // Processing time (double) - 8 bytes
+          if (it->value_size() == sizeof(double)) {
+            std::memcpy(&sfInfo.processingTime, it->value(), sizeof(double));
+          }
+        }
+        else if (it->type() == nlsr::tlv::Load) {
+          // Load (double) - 8 bytes
+          if (it->value_size() == sizeof(double)) {
+            std::memcpy(&sfInfo.load, it->value(), sizeof(double));
+          }
+        }
+        else if (it->type() == nlsr::tlv::UsageCount) {
+          // Usage count - encoded as var number, value follows
+          // The actual value is in the next element or encoded differently
+          // For now, we'll try to read it from the block
+          try {
+            it->parse();
+            if (it->elements_begin() != it->elements_end()) {
+              auto usageVal = it->elements_begin();
+              sfInfo.usageCount = ndn::readVarNumber(*usageVal);
+            }
+          } catch (...) {
+            // If parsing fails, try reading as direct value
+            if (it->value_size() <= 4) {
+              uint32_t count = 0;
+              std::memcpy(&count, it->value(), std::min(it->value_size(), sizeof(uint32_t)));
+              sfInfo.usageCount = count;
+            }
+          }
+        }
+      }
+      
+      // Store Service Function information if we have a valid name
+      if (!serviceName.empty()) {
+        m_serviceFunctionInfo[serviceName] = sfInfo;
+      }
+    }
     else {
-      NDN_THROW(Error("Name", val->type()));
+      // Unknown element type - skip it (for forward compatibility)
+      // NDN_THROW(Error("Name", val->type()));
     }
   }
   m_npl = npl;
