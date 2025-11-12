@@ -23,6 +23,7 @@
 #include "tlv-nlsr.hpp"
 #include <ndn-cxx/encoding/block-helpers.hpp>
 #include <ndn-cxx/encoding/encoding-buffer.hpp>
+#include <ndn-cxx/encoding/tlv.hpp>
 #include <ndn-cxx/util/span.hpp>
 #include <vector>
 #include <algorithm>
@@ -207,17 +208,15 @@ NameLsa::wireDecode(const ndn::Block& wire)
           }
         }
         else if (it->type() == nlsr::tlv::UsageCount) {
-          // Usage count - encoded as var number, value follows
-          // The actual value is in the next element or encoded differently
-          // For now, we'll try to read it from the block
+          // Usage count - encoded as var number
+          // The value is stored directly in the block's value
           try {
-            it->parse();
-            if (it->elements_begin() != it->elements_end()) {
-              auto usageVal = it->elements_begin();
-              sfInfo.usageCount = ndn::readVarNumber(*usageVal);
-            }
+            // Read the var number from the block's value
+            auto begin = it->value_begin();
+            auto end = it->value_end();
+            sfInfo.usageCount = static_cast<uint32_t>(ndn::tlv::readVarNumber(begin, end));
           } catch (...) {
-            // If parsing fails, try reading as direct value
+            // If parsing fails, try reading as direct value (fallback)
             if (it->value_size() <= 4) {
               uint32_t count = 0;
               std::memcpy(&count, it->value(), std::min(it->value_size(), sizeof(uint32_t)));
