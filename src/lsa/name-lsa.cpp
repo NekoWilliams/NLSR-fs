@@ -279,6 +279,42 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
     removeName(m_npl.getPrefixInfoForName(name));
     updated = true;
   }
+
+  // Check for Service Function information changes
+  for (const auto& [serviceName, newSfInfo] : nlsa->m_serviceFunctionInfo) {
+    auto it = m_serviceFunctionInfo.find(serviceName);
+    if (it == m_serviceFunctionInfo.end()) {
+      // New Service Function information
+      m_serviceFunctionInfo[serviceName] = newSfInfo;
+      updated = true;
+      NLSR_LOG_DEBUG("Service Function info added for " << serviceName);
+    } else {
+      // Check if Service Function information has changed
+      const auto& oldSfInfo = it->second;
+      if (oldSfInfo.processingTime != newSfInfo.processingTime ||
+          oldSfInfo.load != newSfInfo.load ||
+          oldSfInfo.usageCount != newSfInfo.usageCount) {
+        m_serviceFunctionInfo[serviceName] = newSfInfo;
+        updated = true;
+        NLSR_LOG_DEBUG("Service Function info updated for " << serviceName
+                      << ": processingTime=" << newSfInfo.processingTime
+                      << ", load=" << newSfInfo.load
+                      << ", usageCount=" << newSfInfo.usageCount);
+      }
+    }
+  }
+
+  // Check for removed Service Function information
+  for (auto it = m_serviceFunctionInfo.begin(); it != m_serviceFunctionInfo.end();) {
+    if (nlsa->m_serviceFunctionInfo.find(it->first) == nlsa->m_serviceFunctionInfo.end()) {
+      NLSR_LOG_DEBUG("Service Function info removed for " << it->first);
+      it = m_serviceFunctionInfo.erase(it);
+      updated = true;
+    } else {
+      ++it;
+    }
+  }
+
   return {updated, namesToAdd, namesToRemove};
 }
 
