@@ -70,7 +70,8 @@ RoutingTable::RoutingTable(ndn::Scheduler& scheduler, Lsdb& lsdb, ConfParameter&
       // Don;t do anything on removal, wait for HelloProtocol to confirm and then react
       if (updateType == LsdbUpdate::INSTALLED || updateType == LsdbUpdate::UPDATED) {
         if ((type == Lsa::Type::ADJACENCY  && m_hyperbolicState != HYPERBOLIC_STATE_ON) ||
-            (type == Lsa::Type::COORDINATE && m_hyperbolicState != HYPERBOLIC_STATE_OFF)) {
+            (type == Lsa::Type::COORDINATE && m_hyperbolicState != HYPERBOLIC_STATE_OFF) ||
+            (type == Lsa::Type::NAME)) {  // NAMEタイプのLSA更新時もルーティング計算をスケジュール（Service Function情報の変更に対応）
           scheduleCalculation = true;
         }
       }
