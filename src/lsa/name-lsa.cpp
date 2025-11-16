@@ -20,6 +20,7 @@
  */
 
 #include "name-lsa.hpp"
+#include "logger.hpp"
 #include "tlv-nlsr.hpp"
 #include <ndn-cxx/encoding/block-helpers.hpp>
 #include <ndn-cxx/encoding/encoding-buffer.hpp>
@@ -287,7 +288,7 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
       // New Service Function information
       m_serviceFunctionInfo[serviceName] = newSfInfo;
       updated = true;
-      NLSR_LOG_DEBUG("Service Function info added for " << serviceName);
+      NLSR_LOG_DEBUG("Service Function info added for " << serviceName.toUri());
     } else {
       // Check if Service Function information has changed
       const auto& oldSfInfo = it->second;
@@ -296,7 +297,7 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
           oldSfInfo.usageCount != newSfInfo.usageCount) {
         m_serviceFunctionInfo[serviceName] = newSfInfo;
         updated = true;
-        NLSR_LOG_DEBUG("Service Function info updated for " << serviceName
+        NLSR_LOG_DEBUG("Service Function info updated for " << serviceName.toUri()
                       << ": processingTime=" << newSfInfo.processingTime
                       << ", load=" << newSfInfo.load
                       << ", usageCount=" << newSfInfo.usageCount);
@@ -307,7 +308,7 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
   // Check for removed Service Function information
   for (auto it = m_serviceFunctionInfo.begin(); it != m_serviceFunctionInfo.end();) {
     if (nlsa->m_serviceFunctionInfo.find(it->first) == nlsa->m_serviceFunctionInfo.end()) {
-      NLSR_LOG_DEBUG("Service Function info removed for " << it->first);
+      NLSR_LOG_DEBUG("Service Function info removed for " << it->first.toUri());
       it = m_serviceFunctionInfo.erase(it);
       updated = true;
     } else {
