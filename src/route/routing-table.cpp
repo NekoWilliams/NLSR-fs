@@ -49,6 +49,10 @@ RoutingTable::RoutingTable(ndn::Scheduler& scheduler, Lsdb& lsdb, ConfParameter&
                                       type == Lsa::Type::ADJACENCY;
       bool scheduleCalculation = false;
 
+      NLSR_LOG_DEBUG("onLsdbModified called: type=" << static_cast<int>(type) 
+                     << ", updateType=" << static_cast<int>(updateType)
+                     << ", origin=" << lsa->getOriginRouter());
+
       if (updateType == LsdbUpdate::REMOVED && updateForOwnAdjacencyLsa) {
         // If own Adjacency LSA is removed then we have no ACTIVE neighbors.
         // (Own Coordinate LSA is never removed. But routing table calculation is scheduled
@@ -73,11 +77,15 @@ RoutingTable::RoutingTable(ndn::Scheduler& scheduler, Lsdb& lsdb, ConfParameter&
             (type == Lsa::Type::COORDINATE && m_hyperbolicState != HYPERBOLIC_STATE_OFF) ||
             (type == Lsa::Type::NAME)) {  // NAMEタイプのLSA更新時もルーティング計算をスケジュール（Service Function情報の変更に対応）
           scheduleCalculation = true;
+          NLSR_LOG_DEBUG("Schedule calculation set to true for LSA type: " << static_cast<int>(type));
         }
       }
 
       if (scheduleCalculation) {
+        NLSR_LOG_DEBUG("Calling scheduleRoutingTableCalculation() for LSA type: " << static_cast<int>(type));
         scheduleRoutingTableCalculation();
+      } else {
+        NLSR_LOG_DEBUG("Schedule calculation is false, skipping routing table calculation");
       }
     }
   );
@@ -167,10 +175,13 @@ RoutingTable::calculateHypRoutingTable(bool isDryRun)
 void
 RoutingTable::scheduleRoutingTableCalculation()
 {
+  NLSR_LOG_DEBUG("scheduleRoutingTableCalculation() called, m_isRouteCalculationScheduled=" << m_isRouteCalculationScheduled);
   if (!m_isRouteCalculationScheduled) {
     NLSR_LOG_DEBUG("Scheduling routing table calculation in " << m_routingCalcInterval);
     m_scheduler.schedule(m_routingCalcInterval, [this] { calculate(); });
     m_isRouteCalculationScheduled = true;
+  } else {
+    NLSR_LOG_DEBUG("Routing calculation already scheduled, skipping");
   }
 }
 
