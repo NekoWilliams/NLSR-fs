@@ -396,12 +396,18 @@ ConfFileProcessor::processConfSectionGeneral(const ConfigSection& section)
 
   // sidecar-log-path
   try {
-    std::string sidecarLogPath = section.get<std::string>("sidecar-log-path", "/var/log/sidecar/service.log");
-    m_confParam.setSidecarLogPath(sidecarLogPath);
+    // 設定ファイルに存在するかチェック
+    if (section.has("sidecar-log-path")) {
+      std::string sidecarLogPath = section.get<std::string>("sidecar-log-path");
+      m_confParam.setSidecarLogPath(sidecarLogPath);
+    } else {
+      // 設定ファイルに存在しない場合は空文字列を設定（モニタリングを無効化）
+      m_confParam.setSidecarLogPath("");
+    }
   }
   catch (const std::exception& ex) {
-    // sidecar-log-path is optional, use default value
-    m_confParam.setSidecarLogPath("/var/log/sidecar/service.log");
+    // sidecar-log-path is optional, set empty to disable monitoring
+    m_confParam.setSidecarLogPath("");
   }
 
   return true;

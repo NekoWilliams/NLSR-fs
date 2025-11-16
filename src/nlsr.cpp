@@ -104,8 +104,13 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
   NLSR_LOG_INFO("DatasetInterestHandler initialized successfully");
   NLSR_LOG_INFO("SidecarStatsHandler initialized with log path: " << m_confParam.getSidecarLogPath());
   
-  // Start log file monitoring for sidecar statistics
-  m_sidecarStatsHandler->startLogMonitoring(m_scheduler, 5000);  // 5 second interval
+  // Start log file monitoring for sidecar statistics (only if log path is configured)
+  if (!m_confParam.getSidecarLogPath().empty()) {
+    m_sidecarStatsHandler->startLogMonitoring(m_scheduler, 5000);  // 5 second interval
+    NLSR_LOG_INFO("Started log file monitoring with interval: 5000ms, logPath: " << m_confParam.getSidecarLogPath());
+  } else {
+    NLSR_LOG_INFO("Sidecar log monitoring is disabled (no log path configured)");
+  }
 
   enableIncomingFaceIdIndication();
 
