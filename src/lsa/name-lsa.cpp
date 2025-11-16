@@ -31,6 +31,8 @@
 
 namespace nlsr {
 
+INIT_LOGGER(lsa.NameLsa);
+
 namespace {
 
 template<ndn::encoding::Tag TAG>
