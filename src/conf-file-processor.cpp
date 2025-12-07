@@ -703,13 +703,11 @@ ConfFileProcessor::processConfSectionServiceFunction(const ConfigSection& sectio
     double loadWeight = section.get<double>("load-weight");
     double usageWeight = section.get<double>("usage-weight");
 
-    // 値の検証
-    if (processingWeight < 0.0 || processingWeight > 1.0 ||
-        loadWeight < 0.0 || loadWeight > 1.0 ||
-        usageWeight < 0.0 || usageWeight > 1.0 ||
-        std::abs(processingWeight + loadWeight + usageWeight - 1.0) > 0.0001) {
+    // 値の検証（負の値のみチェック、範囲制限と合計の制約を削除）
+    // Weightはスケーリングファクターとして使用されるため、任意の正の値を受け入れる
+    if (processingWeight < 0.0 || loadWeight < 0.0 || usageWeight < 0.0) {
       std::cerr << "Invalid weight values in service-function section. "
-                << "Values must be between 0 and 1 and sum to 1.0" << std::endl;
+                << "Values must be non-negative" << std::endl;
       return false;
     }
 
