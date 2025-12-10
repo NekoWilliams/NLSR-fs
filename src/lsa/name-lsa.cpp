@@ -107,7 +107,12 @@ NameLsa::wireEncode(ndn::EncodingImpl<TAG>& block) const
   size_t totalLength = 0;
 
   // エンコードService Function情報
+  NLSR_LOG_DEBUG("wireEncode: Encoding " << m_serviceFunctionInfo.size() << " Service Function info entries");
   for (const auto& [name, info] : m_serviceFunctionInfo) {
+    NLSR_LOG_DEBUG("wireEncode: Encoding Service Function: " << name 
+                  << ", processingTime=" << info.processingTime
+                  << ", load=" << info.load << ", usageCount=" << info.usageCount);
+    
     size_t sfInfoLength = 0;
     
     // Service Function情報をエンコード
@@ -123,6 +128,8 @@ NameLsa::wireEncode(ndn::EncodingImpl<TAG>& block) const
     totalLength += sfInfoLength;
     totalLength += block.prependVarNumber(sfInfoLength);
     totalLength += block.prependVarNumber(nlsr::tlv::ServiceFunction);
+    
+    NLSR_LOG_DEBUG("wireEncode: Encoded Service Function: " << name << ", length=" << sfInfoLength);
   }
 
   // 名前プレフィックスリストをエンコード
@@ -183,12 +190,16 @@ NameLsa::wireDecode(const ndn::Block& wire)
   NamePrefixList npl;
   m_serviceFunctionInfo.clear();  // Clear existing Service Function info
   
+  NLSR_LOG_DEBUG("wireDecode: Starting decode, will look for Service Function TLV elements");
+  int serviceFunctionCount = 0;
+  
   for (; val != m_wire.elements_end(); ++val) {
     if (val->type() == nlsr::tlv::PrefixInfo) {
       npl.insert(PrefixInfo(*val));
     }
     else if (val->type() == nlsr::tlv::ServiceFunction) {
       // Decode Service Function information
+      NLSR_LOG_DEBUG("wireDecode: Found ServiceFunction TLV element #" << (serviceFunctionCount + 1));
       val->parse();
       
       ndn::Name serviceName;
@@ -208,22 +219,35 @@ NameLsa::wireDecode(const ndn::Block& wire)
         elements.push_back(*sfVal);
       }
       
+      NLSR_LOG_DEBUG("wireDecode: ServiceFunction TLV has " << elements.size() << " sub-elements");
+      
       // Process elements in reverse order (to match encoding order)
       for (auto it = elements.rbegin(); it != elements.rend(); ++it) {
         if (it->type() == ndn::tlv::Name) {
           // Service function name
           serviceName.wireDecode(*it);
+          NLSR_LOG_DEBUG("wireDecode: Decoded Service Function name: " << serviceName);
         }
         else if (it->type() == nlsr::tlv::ProcessingTime) {
           // Processing time (double) - 8 bytes
           if (it->value_size() == sizeof(double)) {
             std::memcpy(&sfInfo.processingTime, it->value(), sizeof(double));
+            NLSR_LOG_DEBUG("wireDecode: Decoded ProcessingTime: " << sfInfo.processingTime 
+                          << " (value_size=" << it->value_size() << ")");
+          } else {
+            NLSR_LOG_WARN("wireDecode: ProcessingTime value_size mismatch: expected " 
+                         << sizeof(double) << ", got " << it->value_size());
           }
         }
         else if (it->type() == nlsr::tlv::Load) {
           // Load (double) - 8 bytes
           if (it->value_size() == sizeof(double)) {
             std::memcpy(&sfInfo.load, it->value(), sizeof(double));
+            NLSR_LOG_DEBUG("wireDecode: Decoded Load: " << sfInfo.load 
+                          << " (value_size=" << it->value_size() << ")");
+          } else {
+            NLSR_LOG_WARN("wireDecode: Load value_size mismatch: expected " 
+                         << sizeof(double) << ", got " << it->value_size());
           }
         }
         else if (it->type() == nlsr::tlv::UsageCount) {
@@ -234,20 +258,30 @@ NameLsa::wireDecode(const ndn::Block& wire)
             auto begin = it->value_begin();
             auto end = it->value_end();
             sfInfo.usageCount = static_cast<uint32_t>(ndn::tlv::readVarNumber(begin, end));
+            NLSR_LOG_DEBUG("wireDecode: Decoded UsageCount: " << sfInfo.usageCount);
           } catch (...) {
             // If parsing fails, try reading as direct value (fallback)
             if (it->value_size() <= 4) {
               uint32_t count = 0;
               std::memcpy(&count, it->value(), std::min(it->value_size(), sizeof(uint32_t)));
               sfInfo.usageCount = count;
+              NLSR_LOG_DEBUG("wireDecode: Decoded UsageCount (fallback): " << sfInfo.usageCount);
             }
           }
+        } else {
+          NLSR_LOG_DEBUG("wireDecode: Unknown Service Function sub-element type: " << it->type());
         }
       }
       
       // Store Service Function information if we have a valid name
       if (!serviceName.empty()) {
         m_serviceFunctionInfo[serviceName] = sfInfo;
+        serviceFunctionCount++;
+        NLSR_LOG_DEBUG("wireDecode: Stored Service Function info: " << serviceName 
+                      << " -> processingTime=" << sfInfo.processingTime
+                      << ", load=" << sfInfo.load << ", usageCount=" << sfInfo.usageCount);
+      } else {
+        NLSR_LOG_WARN("wireDecode: Service Function name is empty, skipping");
       }
     }
     else {
@@ -256,6 +290,13 @@ NameLsa::wireDecode(const ndn::Block& wire)
     }
   }
   m_npl = npl;
+  
+  NLSR_LOG_DEBUG("wireDecode: Completed decode. Service Function info entries: " << m_serviceFunctionInfo.size());
+  for (const auto& [name, info] : m_serviceFunctionInfo) {
+    NLSR_LOG_DEBUG("wireDecode: Final Service Function info: " << name 
+                  << " -> processingTime=" << info.processingTime
+                  << ", load=" << info.load << ", usageCount=" << info.usageCount);
+  }
 }
 
 void
