@@ -35,6 +35,7 @@
 #include <functional>
 #include <cstring>
 #include <ctime>
+#include <chrono>
 
 namespace nlsr {
 
@@ -378,22 +379,215 @@ SidecarStatsHandler::SidecarStatsHandler(ndn::mgmt::Dispatcher& dispatcher,
   }
 }
 
-ServiceFunctionInfo
-SidecarStatsHandler::convertStatsToServiceFunctionInfo(const std::map<std::string, std::string>& stats) const
+std::vector<std::map<std::string, std::string>>
+SidecarStatsHandler::parseSidecarLogWithTimeWindow(uint32_t windowSeconds) const
 {
-  ServiceFunctionInfo info;
+  NLSR_LOG_DEBUG("parseSidecarLogWithTimeWindow called: windowSeconds=" << windowSeconds);
   
-  // Initialize with default values
-  info.processingTime = 0.0;
-  info.load = 0.0;
-  info.usageCount = 0;
-  info.lastUpdateTime = ndn::time::system_clock::now();
+  std::vector<std::map<std::string, std::string>> logEntries;
+  
+  if (!m_confParam) {
+    NLSR_LOG_WARN("ConfParameter not available, falling back to parseSidecarLog()");
+    return parseSidecarLog();
+  }
+  
+  try {
+    std::ifstream logFile(m_logPath);
+    
+    if (!logFile.is_open()) {
+      NLSR_LOG_WARN("Cannot open log file: " + m_logPath);
+      return logEntries;
+    }
+    
+    // Calculate time window start (current time - windowSeconds)
+    auto now = std::chrono::system_clock::now();
+    auto windowStart = now - std::chrono::seconds(windowSeconds);
+    
+    // Helper function to parse timestamp string to time_point
+    auto parseTimestampToTimePoint = [](const std::string& timestamp) -> std::chrono::system_clock::time_point {
+      try {
+        // Format: "2025-11-12 02:58:50.676086"
+        if (timestamp.length() < 19) {
+          return std::chrono::system_clock::time_point::min();
+        }
+        
+        int year = std::stoi(timestamp.substr(0, 4));
+        int month = std::stoi(timestamp.substr(5, 2));
+        int day = std::stoi(timestamp.substr(8, 2));
+        int hour = std::stoi(timestamp.substr(11, 2));
+        int minute = std::stoi(timestamp.substr(14, 2));
+        int second = std::stoi(timestamp.substr(17, 2));
+        int microsecond = 0;
+        
+        if (timestamp.length() > 19) {
+          std::string microsecStr = timestamp.substr(20);
+          if (!microsecStr.empty() && microsecStr.length() <= 6) {
+            // Pad to 6 digits if necessary
+            while (microsecStr.length() < 6) {
+              microsecStr += "0";
+            }
+            microsecStr = microsecStr.substr(0, 6);
+            microsecond = std::stoi(microsecStr);
+          }
+        }
+        
+        std::tm timeinfo = {};
+        timeinfo.tm_year = year - 1900;
+        timeinfo.tm_mon = month - 1;
+        timeinfo.tm_mday = day;
+        timeinfo.tm_hour = hour;
+        timeinfo.tm_min = minute;
+        timeinfo.tm_sec = second;
+        
+        std::time_t time = std::mktime(&timeinfo);
+        auto timePoint = std::chrono::system_clock::from_time_t(time);
+        timePoint += std::chrono::microseconds(microsecond);
+        
+        return timePoint;
+      } catch (const std::exception&) {
+        return std::chrono::system_clock::time_point::min();
+      }
+    };
+    
+    std::string line;
+    int lineCount = 0;
+    int entriesInWindow = 0;
+    
+    // Read all lines and filter by time window
+    while (std::getline(logFile, line)) {
+      lineCount++;
+      try {
+        // Parse the log entry (same logic as parseSidecarLog)
+        std::map<std::string, std::string> entry;
+        
+        line.erase(0, line.find_first_not_of(" \t"));
+        line.erase(line.find_last_not_of(" \t") + 1);
+        
+        if (line.empty() || line.front() != '{' || line.back() != '}') {
+          continue;
+        }
+        
+        // Extract service_call information
+        size_t scStart = line.find("\"service_call\"");
+        if (scStart != std::string::npos) {
+          size_t scBegin = line.find('{', scStart);
+          size_t scEnd = line.find('}', scBegin);
+          if (scBegin != std::string::npos && scEnd != std::string::npos) {
+            std::string serviceCall = line.substr(scBegin, scEnd - scBegin + 1);
+            
+            size_t inTimePos = serviceCall.find("\"in_time\"");
+            size_t outTimePos = serviceCall.find("\"out_time\"");
+            
+            if (inTimePos != std::string::npos) {
+              size_t colonPos = serviceCall.find(':', inTimePos);
+              size_t quoteStart = serviceCall.find('"', colonPos);
+              size_t quoteEnd = serviceCall.find('"', quoteStart + 1);
+              if (quoteStart != std::string::npos && quoteEnd != std::string::npos) {
+                entry["service_call_in_time"] = serviceCall.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+              }
+            }
+            
+            if (outTimePos != std::string::npos) {
+              size_t colonPos = serviceCall.find(':', outTimePos);
+              size_t quoteStart = serviceCall.find('"', colonPos);
+              size_t quoteEnd = serviceCall.find('"', quoteStart + 1);
+              if (quoteStart != std::string::npos && quoteEnd != std::string::npos) {
+                entry["service_call_out_time"] = serviceCall.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+              }
+            }
+          }
+        }
+        
+        // Extract sidecar information
+        size_t sidecarStart = line.find("\"sidecar\"");
+        if (sidecarStart != std::string::npos) {
+          size_t scBegin = line.find('{', sidecarStart);
+          size_t scEnd = line.find('}', scBegin);
+          if (scBegin != std::string::npos && scEnd != std::string::npos) {
+            std::string sidecar = line.substr(scBegin, scEnd - scBegin + 1);
+            
+            size_t inTimePos = sidecar.find("\"in_time\"");
+            size_t outTimePos = sidecar.find("\"out_time\"");
+            
+            if (inTimePos != std::string::npos) {
+              size_t colonPos = sidecar.find(':', inTimePos);
+              size_t quoteStart = sidecar.find('"', colonPos);
+              size_t quoteEnd = sidecar.find('"', quoteStart + 1);
+              if (quoteStart != std::string::npos && quoteEnd != std::string::npos) {
+                entry["sidecar_in_time"] = sidecar.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+              }
+            }
+            
+            if (outTimePos != std::string::npos) {
+              size_t colonPos = sidecar.find(':', outTimePos);
+              size_t quoteStart = sidecar.find('"', colonPos);
+              size_t quoteEnd = sidecar.find('"', quoteStart + 1);
+              if (quoteStart != std::string::npos && quoteEnd != std::string::npos) {
+                entry["sidecar_out_time"] = sidecar.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+              }
+            }
+          }
+        }
+        
+        // Extract sfc_time if available
+        size_t sfcTimePos = line.find("\"sfc_time\"");
+        if (sfcTimePos != std::string::npos) {
+          size_t colonPos = line.find(':', sfcTimePos);
+          size_t quoteStart = line.find('"', colonPos);
+          size_t quoteEnd = line.find('"', quoteStart + 1);
+          if (quoteStart != std::string::npos && quoteEnd != std::string::npos) {
+            entry["sfc_time"] = line.substr(quoteStart + 1, quoteEnd - quoteStart - 1);
+          }
+        }
+        
+        // Check if entry is within time window
+        if (!entry.empty()) {
+          // Use service_call_in_time if available, otherwise use sidecar_in_time
+          std::string timeStr;
+          if (entry.find("service_call_in_time") != entry.end()) {
+            timeStr = entry["service_call_in_time"];
+          } else if (entry.find("sidecar_in_time") != entry.end()) {
+            timeStr = entry["sidecar_in_time"];
+          }
+          
+          if (!timeStr.empty()) {
+            auto entryTime = parseTimestampToTimePoint(timeStr);
+            if (entryTime >= windowStart && entryTime <= now) {
+              logEntries.push_back(entry);
+              entriesInWindow++;
+            }
+          } else {
+            // If no timestamp available, include the entry (fallback)
+            logEntries.push_back(entry);
+            entriesInWindow++;
+          }
+        }
+      } catch (const std::exception& e) {
+        NLSR_LOG_WARN("Error parsing line " + std::to_string(lineCount) + ": " + std::string(e.what()));
+        continue;
+      }
+    }
+    
+    NLSR_LOG_DEBUG("Parsed " << entriesInWindow << " entries within time window (total lines: " << lineCount << ")");
+  }
+  catch (const std::exception& e) {
+    NLSR_LOG_ERROR("Error reading log file: " + std::string(e.what()));
+  }
+  
+  return logEntries;
+}
+
+double
+SidecarStatsHandler::calculateUtilization(const std::vector<std::map<std::string, std::string>>& entries,
+                                           uint32_t windowSeconds) const
+{
+  if (entries.empty() || windowSeconds == 0) {
+    return 0.0;
+  }
   
   // Helper function to parse timestamp string to seconds since epoch
   auto parseTimestamp = [](const std::string& timestamp) -> double {
     try {
-      // Format: "2025-11-12 02:58:50.676086"
-      // Parse year, month, day, hour, minute, second, microsecond
       if (timestamp.length() < 19) {
         return 0.0;
       }
@@ -407,15 +601,12 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo(const std::map<std::strin
       double microsecond = 0.0;
       
       if (timestamp.length() > 19) {
-        // Extract microseconds
         std::string microsecStr = timestamp.substr(20);
         if (!microsecStr.empty()) {
           microsecond = std::stod("0." + microsecStr);
         }
       }
       
-      // Convert to seconds since epoch (simplified calculation)
-      // Note: This is a simplified implementation. For production, use proper date/time library
       std::tm timeinfo = {};
       timeinfo.tm_year = year - 1900;
       timeinfo.tm_mon = month - 1;
@@ -431,55 +622,95 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo(const std::map<std::strin
     }
   };
   
-  // Extract processing time
-  // Priority: 1) service_call times, 2) sidecar times, 3) direct processing_time
-  if (stats.find("service_call_in_time") != stats.end() && 
-      stats.find("service_call_out_time") != stats.end()) {
-    try {
-      double inTime = parseTimestamp(stats.at("service_call_in_time"));
-      double outTime = parseTimestamp(stats.at("service_call_out_time"));
-      if (inTime > 0.0 && outTime > 0.0) {
-        info.processingTime = outTime - inTime;
+  double totalProcessingTime = 0.0;
+  int validEntries = 0;
+  
+  // Calculate total processing time from all entries
+  for (const auto& entry : entries) {
+    double processingTime = 0.0;
+    
+    // Priority: 1) service_call times, 2) sidecar times
+    if (entry.find("service_call_in_time") != entry.end() && 
+        entry.find("service_call_out_time") != entry.end()) {
+      try {
+        double inTime = parseTimestamp(entry.at("service_call_in_time"));
+        double outTime = parseTimestamp(entry.at("service_call_out_time"));
+        if (inTime > 0.0 && outTime > 0.0) {
+          processingTime = outTime - inTime;
+        }
+      } catch (const std::exception&) {
+        // Skip this entry
+        continue;
       }
-    } catch (const std::exception& e) {
-      NLSR_LOG_WARN("Failed to calculate processing_time from service_call times: " + std::string(e.what()));
-    }
-  } else if (stats.find("sidecar_in_time") != stats.end() && 
-             stats.find("sidecar_out_time") != stats.end()) {
-    try {
-      double inTime = parseTimestamp(stats.at("sidecar_in_time"));
-      double outTime = parseTimestamp(stats.at("sidecar_out_time"));
-      if (inTime > 0.0 && outTime > 0.0) {
-        info.processingTime = outTime - inTime;
+    } else if (entry.find("sidecar_in_time") != entry.end() && 
+               entry.find("sidecar_out_time") != entry.end()) {
+      try {
+        double inTime = parseTimestamp(entry.at("sidecar_in_time"));
+        double outTime = parseTimestamp(entry.at("sidecar_out_time"));
+        if (inTime > 0.0 && outTime > 0.0) {
+          processingTime = outTime - inTime;
+        }
+      } catch (const std::exception&) {
+        // Skip this entry
+        continue;
       }
-    } catch (const std::exception& e) {
-      NLSR_LOG_WARN("Failed to calculate processing_time from sidecar times: " + std::string(e.what()));
     }
-  } else if (stats.find("processing_time") != stats.end()) {
-    try {
-      info.processingTime = std::stod(stats.at("processing_time"));
-    } catch (const std::exception& e) {
-      NLSR_LOG_WARN("Failed to parse processing_time: " + std::string(e.what()));
+    
+    if (processingTime > 0.0) {
+      totalProcessingTime += processingTime;
+      validEntries++;
     }
   }
   
-  // Extract load (if available in stats)
-  if (stats.find("load") != stats.end()) {
-    try {
-      info.load = std::stod(stats.at("load"));
-    } catch (const std::exception& e) {
-      NLSR_LOG_WARN("Failed to parse load: " + std::string(e.what()));
-    }
+  // Calculate utilization: total processing time / time window
+  double utilization = totalProcessingTime / static_cast<double>(windowSeconds);
+  
+  // Clamp to [0.0, 1.0] (utilization cannot exceed 100%)
+  if (utilization > 1.0) {
+    utilization = 1.0;
   }
   
-  // Extract usage count
-  if (stats.find("usage_count") != stats.end()) {
-    try {
-      info.usageCount = static_cast<uint32_t>(std::stoul(stats.at("usage_count")));
-    } catch (const std::exception& e) {
-      NLSR_LOG_WARN("Failed to parse usage_count: " + std::string(e.what()));
-    }
+  NLSR_LOG_DEBUG("Calculated utilization: " << utilization 
+                 << " (totalProcessingTime=" << totalProcessingTime 
+                 << "s, windowSeconds=" << windowSeconds 
+                 << ", validEntries=" << validEntries << ")");
+  
+  return utilization;
+}
+
+ServiceFunctionInfo
+SidecarStatsHandler::convertStatsToServiceFunctionInfo() const
+{
+  ServiceFunctionInfo info;
+  
+  // Initialize with default values
+  info.processingTime = 0.0;  // Now stores utilization (0.0 ~ 1.0)
+  info.load = 0.0;
+  info.usageCount = 0;
+  info.lastUpdateTime = ndn::time::system_clock::now();
+  
+  if (!m_confParam) {
+    NLSR_LOG_WARN("ConfParameter not available, cannot calculate utilization");
+    return info;
   }
+  
+  // Get time window from configuration
+  uint32_t windowSeconds = m_confParam->getUtilizationWindowSeconds();
+  NLSR_LOG_DEBUG("Calculating utilization with time window: " << windowSeconds << " seconds");
+  
+  // Parse log entries within time window
+  auto entries = parseSidecarLogWithTimeWindow(windowSeconds);
+  
+  if (entries.empty()) {
+    NLSR_LOG_DEBUG("No log entries found within time window, returning default values");
+    return info;
+  }
+  
+  // Calculate utilization
+  info.processingTime = calculateUtilization(entries, windowSeconds);
+  
+  NLSR_LOG_DEBUG("ServiceFunctionInfo: utilization=" << info.processingTime 
+                 << " (calculated from " << entries.size() << " entries)");
   
   return info;
 }
@@ -506,19 +737,9 @@ SidecarStatsHandler::updateNameLsaWithStats()
   }
   
   try {
-    NLSR_LOG_DEBUG("Getting latest stats from log file...");
-    auto stats = getLatestStats();
-    
-    NLSR_LOG_DEBUG("Retrieved " << stats.size() << " stat entries");
-    
-    if (stats.find("error") != stats.end()) {
-      NLSR_LOG_DEBUG("No valid statistics available, skipping NameLSA update: " << stats.at("error"));
-      return;
-    }
-    
-    // Convert statistics to ServiceFunctionInfo
-    NLSR_LOG_DEBUG("Converting stats to ServiceFunctionInfo...");
-    ServiceFunctionInfo sfInfo = convertStatsToServiceFunctionInfo(stats);
+    // Convert statistics to ServiceFunctionInfo (now calculates utilization)
+    NLSR_LOG_DEBUG("Converting stats to ServiceFunctionInfo (utilization-based)...");
+    ServiceFunctionInfo sfInfo = convertStatsToServiceFunctionInfo();
     
     NLSR_LOG_DEBUG("ServiceFunctionInfo: processingTime=" << sfInfo.processingTime 
                    << ", load=" << sfInfo.load 

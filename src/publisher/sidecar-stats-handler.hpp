@@ -124,16 +124,32 @@ private:
   std::vector<std::map<std::string, std::string>>
   parseSidecarLog() const;
 
+  /*! \brief parse sidecar log file with time window
+   *  \param windowSeconds Time window in seconds
+   */
+  std::vector<std::map<std::string, std::string>>
+  parseSidecarLogWithTimeWindow(uint32_t windowSeconds) const;
+
   /*! \brief get latest statistics
   */
   std::map<std::string, std::string>
   getLatestStats() const;
 
+  /*! \brief Calculate utilization from log entries
+   *  \param entries Log entries within time window
+   *  \param windowSeconds Time window in seconds
+   *  \return Utilization (0.0 ~ 1.0)
+   */
+  double
+  calculateUtilization(const std::vector<std::map<std::string, std::string>>& entries,
+                       uint32_t windowSeconds) const;
+
 private:
   /*! \brief Convert statistics map to ServiceFunctionInfo
+   *  Now calculates utilization instead of single request processing time
    */
   ServiceFunctionInfo
-  convertStatsToServiceFunctionInfo(const std::map<std::string, std::string>& stats) const;
+  convertStatsToServiceFunctionInfo() const;
 
   /*! \brief Get the prefix name for service function
    */

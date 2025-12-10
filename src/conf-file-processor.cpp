@@ -713,6 +713,17 @@ ConfFileProcessor::processConfSectionServiceFunction(const ConfigSection& sectio
 
     m_confParam.setServiceFunctionWeights(processingWeight, loadWeight, usageWeight);
   
+  // Parse utilization window setting
+  uint32_t utilizationWindowSeconds = 1;  // デフォルト: 1秒
+  if (section.get_optional<uint32_t>("utilization-window-seconds")) {
+    utilizationWindowSeconds = section.get<uint32_t>("utilization-window-seconds");
+    if (utilizationWindowSeconds == 0) {
+      std::cerr << "Warning: utilization-window-seconds cannot be 0, using default value 1" << std::endl;
+      utilizationWindowSeconds = 1;
+    }
+  }
+  m_confParam.setUtilizationWindowSeconds(utilizationWindowSeconds);
+  
   // Parse dynamic weighting setting
   bool dynamicWeighting = false;
   if (section.get<bool>("dynamic-weighting", dynamicWeighting)) {

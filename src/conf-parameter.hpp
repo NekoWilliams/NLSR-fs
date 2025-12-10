@@ -514,6 +514,19 @@ public:
     return m_usageWeight;
   }
 
+  // Utilization window for time-based utilization calculation
+  void
+  setUtilizationWindowSeconds(uint32_t windowSeconds)
+  {
+    m_utilizationWindowSeconds = windowSeconds;
+  }
+
+  uint32_t
+  getUtilizationWindowSeconds() const
+  {
+    return m_utilizationWindowSeconds;
+  }
+
   // Dynamic weight adjustment methods
   void
   updateWeightsFromSidecar(double processingWeight, double loadWeight, double usageWeight)
@@ -644,6 +657,7 @@ PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   double m_usageWeight = 0.2;       // デフォルト値
   bool m_dynamicWeightingEnabled = false;  // 動的重み付けの有効/無効
   std::set<ndn::Name> m_serviceFunctionPrefixes;  // 複数のファンクションプレフィックスに対応
+  uint32_t m_utilizationWindowSeconds = 1;  // 利用率計算の時間窓（秒）、デフォルト: 1秒
   
   // Sidecar log path
   std::string m_sidecarLogPath = "/var/log/sidecar/service.log";  // デフォルト値
