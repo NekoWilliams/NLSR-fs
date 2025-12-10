@@ -28,6 +28,7 @@
 #include "test-access-control.hpp"
 #include "route/fib.hpp"
 #include "lsdb.hpp"
+#include "conf-parameter.hpp"
 
 #include <list>
 #include <unordered_map>
@@ -45,7 +46,8 @@ public:
 
   NamePrefixTable(const ndn::Name& ownRouterName, Fib& fib, RoutingTable& routingTable,
                   AfterRoutingChange& afterRoutingChangeSignal,
-                  Lsdb::AfterLsdbModified& afterLsdbModifiedSignal);
+                  Lsdb::AfterLsdbModified& afterLsdbModifiedSignal,
+                  Lsdb& lsdb, ConfParameter& confParam);
 
   ~NamePrefixTable();
 
@@ -145,6 +147,8 @@ private:
   const ndn::Name& m_ownRouterName;
   Fib& m_fib;
   RoutingTable& m_routingTable;
+  Lsdb& m_lsdb;
+  ConfParameter& m_confParam;
   ndn::signal::Connection m_afterRoutingChangeConnection;
   ndn::signal::Connection m_afterLsdbModified;
   std::map<std::tuple<ndn::Name, ndn::Name>, double> m_nexthopCost;

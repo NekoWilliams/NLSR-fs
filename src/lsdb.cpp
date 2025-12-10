@@ -101,6 +101,8 @@ Lsdb::buildAndInstallOwnNameLsa()
     // Copy Service Function information from existing NameLSA
     // Note: This is a simplified approach - in a full implementation,
     // we would iterate through all Service Function entries
+    // Use default service function prefix (/relay) for backward compatibility
+    // In a full implementation, this should iterate through all service function entries
     ndn::Name servicePrefix("/relay");
     ServiceFunctionInfo sfInfo = existingNameLsa->getServiceFunctionInfo(servicePrefix);
     if (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {

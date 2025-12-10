@@ -32,6 +32,7 @@
 #include <ndn-cxx/security/certificate-fetcher-direct-fetch.hpp>
 
 #include <optional>
+#include <set>
 
 namespace nlsr {
 
@@ -547,6 +548,41 @@ public:
     return m_sidecarLogPath;
   }
 
+  // Service Function prefix methods
+  void
+  addServiceFunctionPrefix(const ndn::Name& prefix)
+  {
+    m_serviceFunctionPrefixes.insert(prefix);
+  }
+
+  void
+  clearServiceFunctionPrefixes()
+  {
+    m_serviceFunctionPrefixes.clear();
+  }
+
+  bool
+  isServiceFunctionPrefix(const ndn::Name& prefix) const
+  {
+    return m_serviceFunctionPrefixes.find(prefix) != m_serviceFunctionPrefixes.end();
+  }
+
+  const std::set<ndn::Name>&
+  getServiceFunctionPrefixes() const
+  {
+    return m_serviceFunctionPrefixes;
+  }
+
+  // Backward compatibility: get first service function prefix (or default /relay)
+  ndn::Name
+  getServiceFunctionPrefix() const
+  {
+    if (!m_serviceFunctionPrefixes.empty()) {
+      return *m_serviceFunctionPrefixes.begin();
+    }
+    return ndn::Name("/relay");  // Default for backward compatibility
+  }
+
 PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   std::string m_confFileName;
   std::string m_confFileNameDynamic;
@@ -607,6 +643,7 @@ PUBLIC_WITH_TESTS_ELSE_PRIVATE:
   double m_loadWeight = 0.4;        // デフォルト値
   double m_usageWeight = 0.2;       // デフォルト値
   bool m_dynamicWeightingEnabled = false;  // 動的重み付けの有効/無効
+  std::set<ndn::Name> m_serviceFunctionPrefixes;  // 複数のファンクションプレフィックスに対応
   
   // Sidecar log path
   std::string m_sidecarLogPath = "/var/log/sidecar/service.log";  // デフォルト値

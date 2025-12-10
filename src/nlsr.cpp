@@ -45,7 +45,8 @@ Nlsr::Nlsr(ndn::Face& face, ndn::KeyChain& keyChain, ConfParameter& confParam)
   , m_lsdb(m_face, keyChain, m_confParam)
   , m_routingTable(m_scheduler, m_lsdb, m_confParam)
   , m_namePrefixTable(confParam.getRouterPrefix(), m_fib, m_routingTable,
-                      m_routingTable.afterRoutingChange, m_lsdb.onLsdbModified)
+                      m_routingTable.afterRoutingChange, m_lsdb.onLsdbModified,
+                      m_lsdb, m_confParam)
   , m_helloProtocol(m_face, keyChain, confParam, m_routingTable, m_lsdb)
   , m_onNewLsaConnection(m_lsdb.getSync().onNewLsa.connect(
       [this] (const ndn::Name& updateName, uint64_t sequenceNumber,

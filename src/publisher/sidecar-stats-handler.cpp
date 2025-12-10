@@ -487,8 +487,11 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo(const std::map<std::strin
 ndn::Name
 SidecarStatsHandler::getServiceFunctionPrefix() const
 {
-  // Default prefix for service function
-  // This can be customized based on configuration
+  // Get service function prefix from configuration
+  if (m_confParam) {
+    return m_confParam->getServiceFunctionPrefix();
+  }
+  // Fallback to default if ConfParameter is not available
   return ndn::Name("/relay");
 }
 

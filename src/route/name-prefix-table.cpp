@@ -24,6 +24,8 @@
 #include "logger.hpp"
 #include "nlsr.hpp"
 #include "routing-table.hpp"
+#include "lsa/name-lsa.hpp"
+#include "conf-parameter.hpp"
 
 #include <algorithm>
 #include <list>
@@ -36,10 +38,13 @@ INIT_LOGGER(route.NamePrefixTable);
 NamePrefixTable::NamePrefixTable(const ndn::Name& ownRouterName, Fib& fib,
                                  RoutingTable& routingTable,
                                  AfterRoutingChange& afterRoutingChangeSignal,
-                                 Lsdb::AfterLsdbModified& afterLsdbModifiedSignal)
+                                 Lsdb::AfterLsdbModified& afterLsdbModifiedSignal,
+                                 Lsdb& lsdb, ConfParameter& confParam)
   : m_ownRouterName(ownRouterName)
   , m_fib(fib)
   , m_routingTable(routingTable)
+  , m_lsdb(lsdb)
+  , m_confParam(confParam)
 {
   m_afterRoutingChangeConnection = afterRoutingChangeSignal.connect(
     [this] (const std::list<RoutingTableEntry>& entries) {
@@ -120,9 +125,38 @@ NexthopList
 NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& nameToCheck, const ndn::Name& destRouterName)
 {
   NexthopList new_nhList;
+  
+  // Calculate FunctionCost for service function prefix if applicable
+  // Check if the name prefix is registered as a service function in the configuration
+  double functionCost = 0.0;
+  if (m_confParam.isServiceFunctionPrefix(nameToCheck)) {
+    // Get Service Function information from the destination router's NameLSA
+    auto nameLsa = m_lsdb.findLsa<NameLsa>(destRouterName);
+    if (nameLsa) {
+      ServiceFunctionInfo sfInfo = nameLsa->getServiceFunctionInfo(nameToCheck);
+      
+      // Calculate function cost if Service Function info is available
+      if (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {
+        double processingWeight = m_confParam.getProcessingWeight();
+        double loadWeight = m_confParam.getLoadWeight();
+        double usageWeight = m_confParam.getUsageWeight();
+        
+        functionCost = sfInfo.processingTime * processingWeight +
+                      sfInfo.load * loadWeight +
+                      (sfInfo.usageCount / 100.0) * usageWeight;
+        
+        NLSR_LOG_DEBUG("FunctionCost for " << nameToCheck << " prefix to " << destRouterName 
+                      << ": processingTime=" << sfInfo.processingTime 
+                      << ", functionCost=" << functionCost);
+      }
+    }
+  }
+  
   for (const auto& nh : nhlist.getNextHops()) {
-      const NextHop newNextHop = NextHop(nh.getConnectingFaceUri(), nh.getRouteCost() +
-                                              m_nexthopCost[DestNameKey(destRouterName, nameToCheck)]);
+      double adjustedCost = nh.getRouteCost() + 
+                           m_nexthopCost[DestNameKey(destRouterName, nameToCheck)] +
+                           functionCost;
+      const NextHop newNextHop = NextHop(nh.getConnectingFaceUri(), adjustedCost);
       new_nhList.addNextHop(newNextHop);
   }
   return new_nhList;

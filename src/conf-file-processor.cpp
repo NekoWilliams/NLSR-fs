@@ -718,6 +718,34 @@ ConfFileProcessor::processConfSectionServiceFunction(const ConfigSection& sectio
   if (section.get<bool>("dynamic-weighting", dynamicWeighting)) {
     m_confParam.setDynamicWeightingEnabled(dynamicWeighting);
   }
+
+  // Parse service function prefixes (optional, can be specified multiple times)
+  // Clear existing prefixes first
+  m_confParam.clearServiceFunctionPrefixes();
+  
+  // boost::property_tree allows multiple entries with the same key
+  // Iterate through all entries to find all function-prefix values
+  bool foundFunctionPrefix = false;
+  for (const auto& item : section) {
+    if (item.first == "function-prefix") {
+      try {
+        std::string functionPrefixStr = item.second.get_value<std::string>();
+        if (!functionPrefixStr.empty()) {
+          ndn::Name functionPrefix(functionPrefixStr);
+          m_confParam.addServiceFunctionPrefix(functionPrefix);
+          foundFunctionPrefix = true;
+        }
+      } catch (const std::exception& e) {
+        std::cerr << "Error parsing function-prefix: " << e.what() << std::endl;
+      }
+    }
+  }
+  
+  // If no function-prefix was specified, add default /relay for backward compatibility
+  if (!foundFunctionPrefix) {
+    m_confParam.addServiceFunctionPrefix(ndn::Name("/relay"));
+  }
+  
     return true;
   }
   catch (const std::exception& e) {

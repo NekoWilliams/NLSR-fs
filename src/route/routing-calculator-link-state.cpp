@@ -341,28 +341,9 @@ calculateDijkstraPath(const AdjMatrix& matrix, int sourceRouter,
     for (size_t v = 0; v < nRouters; ++v) {
       if (matrix[u][v] >= 0 && isNotExplored(q, v, start + 1)) {
         double linkCost = matrix[u][v];
+        // FunctionCost is now applied to /relay prefix cost in NamePrefixTable::adjustNexthopCosts
+        // No longer applying FunctionCost to router-to-router path cost
         double functionCost = 0.0;
-        
-        // Get Service Function information if available
-        if (lsdb && map && confParam) {
-          auto destRouterName = map->getRouterNameByMappingNo(v);
-          if (destRouterName) {
-            auto nameLsa = lsdb->findLsa<NameLsa>(*destRouterName);
-            if (nameLsa) {
-              // Get Service Function info for default prefix (/relay)
-              ndn::Name servicePrefix("/relay");
-              ServiceFunctionInfo sfInfo = nameLsa->getServiceFunctionInfo(servicePrefix);
-              
-              // Calculate function cost if Service Function info is available
-              if (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {
-                // Use calculateCombinedCost to compute the cost
-                PathCost combinedCost = calculateCombinedCost(linkCost, sfInfo, *confParam);
-                linkCost = combinedCost.linkCost;
-                functionCost = combinedCost.functionCost;
-              }
-            }
-          }
-        }
         
         PathCost newCost(linkCost, functionCost);
         if (newCost.totalCost + costs[u].totalCost < costs[v].totalCost) {
