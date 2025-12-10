@@ -284,26 +284,11 @@ simulateOneNeighbor(AdjMatrix& matrix, int sourceRouter, const Link& accessibleN
   }
 }
 
-// Calculate combined cost including Service Function information
-static PathCost
-calculateCombinedCost(double linkCost, const ServiceFunctionInfo& sfInfo,
-                     const ConfParameter& confParam)
-{
-  if (linkCost < 0) {
-    return PathCost();  // INF_DISTANCEを返す
-  }
- 
-  // Use dynamic weights if enabled, otherwise use static weights
-  double processingWeight = confParam.getProcessingWeight();
-  double loadWeight = confParam.getLoadWeight();
-  double usageWeight = confParam.getUsageWeight();
- 
-  double functionCost = sfInfo.processingTime * processingWeight +
-                       sfInfo.load * loadWeight +
-                       (sfInfo.usageCount / 100.0) * usageWeight;
- 
-  return PathCost(linkCost, functionCost);
-}
+// NOTE: calculateCombinedCost function was removed because FunctionCost
+// is now calculated and applied in NamePrefixTable::adjustNexthopCosts
+// instead of during router-to-router path calculation.
+// This change allows FunctionCost to be applied only to specific service
+// function prefixes (e.g., /relay) rather than all router-to-router paths.
 
 /**
  * @brief Compute the shortest path from a source router to every other router.
