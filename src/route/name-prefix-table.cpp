@@ -105,40 +105,36 @@ NamePrefixTable::updateFromLsdb(std::shared_ptr<Lsa> lsa, LsdbUpdate updateType,
     auto nlsa = std::static_pointer_cast<NameLsa>(lsa);
     NLSR_LOG_DEBUG("updateFromLsdb: NAME LSA UPDATED, checking for Service Function info changes");
     
-    // Check if Service Function information has changed
-    // If Service Function info changed, we need to update the FIB for existing entries
-    auto existingLsa = m_lsdb.findLsa<NameLsa>(lsa->getOriginRouter());
-    if (existingLsa) {
-      const auto& allSfInfo = nlsa->getAllServiceFunctionInfo();
-      bool sfInfoChanged = false;
-      for (const auto& [serviceName, newSfInfo] : allSfInfo) {
-        ServiceFunctionInfo oldSfInfo = existingLsa->getServiceFunctionInfo(serviceName);
-        if (oldSfInfo.processingTime != newSfInfo.processingTime ||
-            oldSfInfo.load != newSfInfo.load ||
-            oldSfInfo.usageCount != newSfInfo.usageCount) {
-          sfInfoChanged = true;
-          NLSR_LOG_DEBUG("updateFromLsdb: Service Function info changed for " << serviceName.toUri()
-                        << ": old processingTime=" << oldSfInfo.processingTime
-                        << ", new processingTime=" << newSfInfo.processingTime);
-          break;
-        }
+    // Check if Service Function information exists in the updated NameLSA
+    // If Service Function info exists, we need to update the FIB for existing entries
+    // Note: At this point, the LSDB has already been updated, so we use the new LSA directly
+    const auto& allSfInfo = nlsa->getAllServiceFunctionInfo();
+    bool hasSfInfo = false;
+    for (const auto& [serviceName, sfInfo] : allSfInfo) {
+      if (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {
+        hasSfInfo = true;
+        NLSR_LOG_DEBUG("updateFromLsdb: Service Function info found for " << serviceName.toUri()
+                      << ": processingTime=" << sfInfo.processingTime
+                      << ", load=" << sfInfo.load
+                      << ", usageCount=" << sfInfo.usageCount);
       }
-      
-      // If Service Function info changed, update existing entries to recalculate FunctionCost
-      if (sfInfoChanged) {
-        NLSR_LOG_DEBUG("updateFromLsdb: Service Function info changed, updating existing entries");
-        // Find all entries for this router and update them
-        for (auto& entry : m_table) {
-          auto rtpeList = entry->getRteList();
-          for (const auto& rtpe : rtpeList) {
-            if (rtpe->getDestination() == lsa->getOriginRouter()) {
-              NLSR_LOG_DEBUG("updateFromLsdb: Updating entry for prefix=" << entry->getNamePrefix()
-                           << ", router=" << lsa->getOriginRouter());
-              entry->generateNhlfromRteList();
-              if (entry->getNexthopList().size() > 0) {
-                m_fib.update(entry->getNamePrefix(), 
-                            adjustNexthopCosts(entry->getNexthopList(), entry->getNamePrefix(), lsa->getOriginRouter()));
-              }
+    }
+    
+    // If Service Function info exists, update existing entries to recalculate FunctionCost
+    // This ensures that FunctionCost is recalculated whenever NameLSA is updated with Service Function info
+    if (hasSfInfo || !allSfInfo.empty()) {
+      NLSR_LOG_DEBUG("updateFromLsdb: Service Function info present, updating existing entries for router=" << lsa->getOriginRouter());
+      // Find all entries for this router and update them
+      for (auto& entry : m_table) {
+        auto rtpeList = entry->getRteList();
+        for (const auto& rtpe : rtpeList) {
+          if (rtpe->getDestination() == lsa->getOriginRouter()) {
+            NLSR_LOG_DEBUG("updateFromLsdb: Updating entry for prefix=" << entry->getNamePrefix()
+                         << ", router=" << lsa->getOriginRouter());
+            entry->generateNhlfromRteList();
+            if (entry->getNexthopList().size() > 0) {
+              m_fib.update(entry->getNamePrefix(), 
+                          adjustNexthopCosts(entry->getNexthopList(), entry->getNamePrefix(), lsa->getOriginRouter()));
             }
           }
         }
