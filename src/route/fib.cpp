@@ -123,6 +123,47 @@ Fib::update(const ndn::Name& name, const NexthopList& allHops)
     }
 
     FibEntry& entry = entryIt->second;
+    bool isUpdatable = isNotNeighbor(entry.name);
+    
+    // Check if costs have changed for existing nexthops
+    // If costs changed, we need to unregister and re-register to update costs
+    bool costsChanged = false;
+    
+    if (isUpdatable) {
+      // Check if any existing nexthop has a different cost
+      for (const auto& newHop : hopsToAdd) {
+        const auto& existingHops = entry.nexthopSet.getNextHops();
+        for (const auto& existingHop : existingHops) {
+          if (existingHop.getConnectingFaceUri() == newHop.getConnectingFaceUri()) {
+            if (std::abs(existingHop.getRouteCost() - newHop.getRouteCost()) > 0.0001) {
+              costsChanged = true;
+              NLSR_LOG_DEBUG("Cost changed for " << existingHop.getConnectingFaceUri()
+                            << ": old=" << existingHop.getRouteCost()
+                            << ", new=" << newHop.getRouteCost());
+              break;
+            }
+          }
+        }
+        if (costsChanged) break;
+      }
+      
+      // If costs changed, unregister all existing nexthops first
+      if (costsChanged) {
+        NLSR_LOG_DEBUG("Costs changed, unregistering existing nexthops for " << entry.name);
+        // Create a copy of existing hops before clearing
+        std::vector<NextHop> existingHopsCopy;
+        for (const auto& existingHop : entry.nexthopSet.getNextHops()) {
+          existingHopsCopy.push_back(existingHop);
+        }
+        // Unregister all existing nexthops
+        for (const auto& existingHop : existingHopsCopy) {
+          unregisterPrefix(entry.name, existingHop.getConnectingFaceUri());
+        }
+        // Clear the nexthop set
+        entry.nexthopSet.clear();
+      }
+    }
+    
     addNextHopsToFibEntryAndNfd(entry, hopsToAdd);
 
     std::set<NextHop, NextHopUriSortedComparator> hopsToRemove;
@@ -131,7 +172,6 @@ Fib::update(const ndn::Name& name, const NexthopList& allHops)
                         std::inserter(hopsToRemove, hopsToRemove.begin()),
                         NextHopUriSortedComparator());
 
-    bool isUpdatable = isNotNeighbor(entry.name);
     // Remove the uninstalled next hops from NFD and FIB entry
     for (const auto& hop : hopsToRemove){
       if (isUpdatable) {
