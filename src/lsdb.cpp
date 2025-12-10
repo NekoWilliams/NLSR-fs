@@ -98,15 +98,17 @@ Lsdb::buildAndInstallOwnNameLsa()
   // Preserve Service Function information from existing NameLSA
   auto existingNameLsa = findLsa<NameLsa>(m_thisRouterPrefix);
   if (existingNameLsa) {
-    // Copy Service Function information from existing NameLSA
-    // Note: This is a simplified approach - in a full implementation,
-    // we would iterate through all Service Function entries
-    // Use default service function prefix (/relay) for backward compatibility
-    // In a full implementation, this should iterate through all service function entries
-    ndn::Name servicePrefix("/relay");
-    ServiceFunctionInfo sfInfo = existingNameLsa->getServiceFunctionInfo(servicePrefix);
-    if (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {
-      nameLsa.setServiceFunctionInfo(servicePrefix, sfInfo);
+    // Copy ALL Service Function information from existing NameLSA
+    // Iterate through all Service Function entries to preserve all information
+    const auto& allSfInfo = existingNameLsa->getAllServiceFunctionInfo();
+    for (const auto& [serviceName, sfInfo] : allSfInfo) {
+      // Copy all Service Function information, even if values are zero
+      // This ensures that recently updated information is preserved
+      nameLsa.setServiceFunctionInfo(serviceName, sfInfo);
+      NLSR_LOG_DEBUG("Preserved Service Function info for " << serviceName.toUri()
+                    << ": processingTime=" << sfInfo.processingTime
+                    << ", load=" << sfInfo.load
+                    << ", usageCount=" << sfInfo.usageCount);
     }
   }
   
