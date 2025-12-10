@@ -52,7 +52,10 @@ enum {
   Load                      = 149,
   UsageCount                = 150,
   LastUpdateTime            = 151,
-  ServiceFunction           = 152
+  ServiceFunction           = 152,
+  ProcessingWeight          = 153,
+  LoadWeight                = 154,
+  UsageWeight               = 155
 };
 
 } // namespace nlsr::tlv

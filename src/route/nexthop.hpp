@@ -84,7 +84,10 @@ public:
       return static_cast<uint64_t>(round(m_routeCost*HYPERBOLIC_COST_ADJUSTMENT_FACTOR));
     }
     else {
-      return static_cast<uint64_t>(m_routeCost);
+      // For Link State routing, also use the adjustment factor to preserve decimal cost differences
+      // This is especially important for FunctionCost which can have small decimal values
+      // e.g. 25.132 -> 25132 (preserves 0.001 precision)
+      return static_cast<uint64_t>(round(m_routeCost*HYPERBOLIC_COST_ADJUSTMENT_FACTOR));
     }
   }
 

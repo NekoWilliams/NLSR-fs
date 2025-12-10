@@ -74,8 +74,11 @@ Fib::addNextHopsToFibEntryAndNfd(FibEntry& entry, const NextHopsUriSortedSet& ho
 
     if (shouldRegister) {
       // Add nexthop to NDN-FIB
+      uint64_t faceCost = hop.getRouteCostAsAdjustedInteger();
+      NLSR_LOG_DEBUG("Registering prefix: " << name << " faceUri: " << hop.getConnectingFaceUri()
+                    << " with cost: " << hop.getRouteCost() << " (as integer: " << faceCost << ")");
       registerPrefix(name, ndn::FaceUri(hop.getConnectingFaceUri()),
-                     hop.getRouteCostAsAdjustedInteger(),
+                     faceCost,
                      ndn::time::seconds(m_refreshTime + GRACE_PERIOD),
                      ndn::nfd::ROUTE_FLAG_CAPTURE, 0);
     }

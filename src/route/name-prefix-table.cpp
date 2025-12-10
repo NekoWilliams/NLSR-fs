@@ -199,19 +199,25 @@ NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& 
     ServiceFunctionInfo sfInfo = nameLsa->getServiceFunctionInfo(nameToCheck);
     
     NLSR_LOG_DEBUG("ServiceFunctionInfo for " << nameToCheck << ": processingTime=" << sfInfo.processingTime
-                  << ", load=" << sfInfo.load << ", usageCount=" << sfInfo.usageCount);
+                  << ", load=" << sfInfo.load << ", usageCount=" << sfInfo.usageCount
+                  << ", processingWeight=" << sfInfo.processingWeight
+                  << ", loadWeight=" << sfInfo.loadWeight
+                  << ", usageWeight=" << sfInfo.usageWeight);
     
     // Calculate function cost if Service Function info is available
     // NameLSAにService Function情報が存在する場合、そのプレフィックスはサービスファンクションと判断
+    // weight情報は、サービスファンクションを持つノード（destRouterName）の設定ファイルから取得
+    // NameLSAに含まれるweight情報を使用する
     if (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {
       NLSR_LOG_DEBUG("Service Function info found in NameLSA for " << nameToCheck 
                     << ", calculating FunctionCost");
       
-      double processingWeight = m_confParam.getProcessingWeight();
-      double loadWeight = m_confParam.getLoadWeight();
-      double usageWeight = m_confParam.getUsageWeight();
+      // NameLSAから取得したweight情報を使用（サービスファンクションを持つノードの設定ファイルの値）
+      double processingWeight = sfInfo.processingWeight;
+      double loadWeight = sfInfo.loadWeight;
+      double usageWeight = sfInfo.usageWeight;
       
-      NLSR_LOG_DEBUG("Weights: processing=" << processingWeight 
+      NLSR_LOG_DEBUG("Weights from NameLSA (node " << destRouterName << "): processing=" << processingWeight 
                     << ", load=" << loadWeight << ", usage=" << usageWeight);
       
       functionCost = sfInfo.processingTime * processingWeight +

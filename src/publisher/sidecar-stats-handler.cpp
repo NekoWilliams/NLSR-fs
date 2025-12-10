@@ -688,11 +688,19 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo() const
   info.load = 0.0;
   info.usageCount = 0;
   info.lastUpdateTime = ndn::time::system_clock::now();
+  info.processingWeight = 0.4;  // Default weight
+  info.loadWeight = 0.4;       // Default weight
+  info.usageWeight = 0.2;       // Default weight
   
   if (!m_confParam) {
     NLSR_LOG_WARN("ConfParameter not available, cannot calculate utilization");
     return info;
   }
+  
+  // Get weight information from configuration file
+  info.processingWeight = m_confParam->getProcessingWeight();
+  info.loadWeight = m_confParam->getLoadWeight();
+  info.usageWeight = m_confParam->getUsageWeight();
   
   // Get time window from configuration
   uint32_t windowSeconds = m_confParam->getUtilizationWindowSeconds();

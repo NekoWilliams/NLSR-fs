@@ -86,13 +86,19 @@ NameLsa::getServiceFunctionInfo(const ndn::Name& name) const
   // Debug: Print all entries in the map
   for (const auto& [mapName, info] : m_serviceFunctionInfo) {
     NLSR_LOG_DEBUG("  Map entry: " << mapName << " -> processingTime=" << info.processingTime
-                  << ", load=" << info.load << ", usageCount=" << info.usageCount);
+                  << ", load=" << info.load << ", usageCount=" << info.usageCount
+                  << ", processingWeight=" << info.processingWeight
+                  << ", loadWeight=" << info.loadWeight
+                  << ", usageWeight=" << info.usageWeight);
   }
   
   auto it = m_serviceFunctionInfo.find(name);
   if (it != m_serviceFunctionInfo.end()) {
     NLSR_LOG_DEBUG("Service Function info found for " << name << ": processingTime=" << it->second.processingTime
-                  << ", load=" << it->second.load << ", usageCount=" << it->second.usageCount);
+                  << ", load=" << it->second.load << ", usageCount=" << it->second.usageCount
+                  << ", processingWeight=" << it->second.processingWeight
+                  << ", loadWeight=" << it->second.loadWeight
+                  << ", usageWeight=" << it->second.usageWeight);
     return it->second;
   } else {
     NLSR_LOG_DEBUG("Service Function info NOT found for " << name << " in map");
@@ -111,11 +117,17 @@ NameLsa::wireEncode(ndn::EncodingImpl<TAG>& block) const
   for (const auto& [name, info] : m_serviceFunctionInfo) {
     NLSR_LOG_DEBUG("wireEncode: Encoding Service Function: " << name 
                   << ", processingTime=" << info.processingTime
-                  << ", load=" << info.load << ", usageCount=" << info.usageCount);
+                  << ", load=" << info.load << ", usageCount=" << info.usageCount
+                  << ", processingWeight=" << info.processingWeight
+                  << ", loadWeight=" << info.loadWeight
+                  << ", usageWeight=" << info.usageWeight);
     
     size_t sfInfoLength = 0;
     
-    // Service Function情報をエンコード
+    // Service Function情報をエンコード（weight情報を含む）
+    sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::UsageWeight, info.usageWeight);
+    sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::LoadWeight, info.loadWeight);
+    sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::ProcessingWeight, info.processingWeight);
     sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::ProcessingTime, info.processingTime);
     sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::Load, info.load);
     sfInfoLength += block.prependVarNumber(info.usageCount);
@@ -210,6 +222,9 @@ NameLsa::wireDecode(const ndn::Block& wire)
       sfInfo.load = 0.0;
       sfInfo.usageCount = 0;
       sfInfo.lastUpdateTime = ndn::time::system_clock::now();
+      sfInfo.processingWeight = 0.4;  // Default weight
+      sfInfo.loadWeight = 0.4;         // Default weight
+      sfInfo.usageWeight = 0.2;        // Default weight
       
       // Parse Service Function TLV elements
       // Note: Due to prepend encoding, elements are in reverse order
@@ -268,6 +283,36 @@ NameLsa::wireDecode(const ndn::Block& wire)
               NLSR_LOG_DEBUG("wireDecode: Decoded UsageCount (fallback): " << sfInfo.usageCount);
             }
           }
+        }
+        else if (it->type() == nlsr::tlv::ProcessingWeight) {
+          // Processing weight (double) - 8 bytes
+          if (it->value_size() == sizeof(double)) {
+            std::memcpy(&sfInfo.processingWeight, it->value(), sizeof(double));
+            NLSR_LOG_DEBUG("wireDecode: Decoded ProcessingWeight: " << sfInfo.processingWeight);
+          } else {
+            NLSR_LOG_WARN("wireDecode: ProcessingWeight value_size mismatch: expected " 
+                         << sizeof(double) << ", got " << it->value_size());
+          }
+        }
+        else if (it->type() == nlsr::tlv::LoadWeight) {
+          // Load weight (double) - 8 bytes
+          if (it->value_size() == sizeof(double)) {
+            std::memcpy(&sfInfo.loadWeight, it->value(), sizeof(double));
+            NLSR_LOG_DEBUG("wireDecode: Decoded LoadWeight: " << sfInfo.loadWeight);
+          } else {
+            NLSR_LOG_WARN("wireDecode: LoadWeight value_size mismatch: expected " 
+                         << sizeof(double) << ", got " << it->value_size());
+          }
+        }
+        else if (it->type() == nlsr::tlv::UsageWeight) {
+          // Usage weight (double) - 8 bytes
+          if (it->value_size() == sizeof(double)) {
+            std::memcpy(&sfInfo.usageWeight, it->value(), sizeof(double));
+            NLSR_LOG_DEBUG("wireDecode: Decoded UsageWeight: " << sfInfo.usageWeight);
+          } else {
+            NLSR_LOG_WARN("wireDecode: UsageWeight value_size mismatch: expected " 
+                         << sizeof(double) << ", got " << it->value_size());
+          }
         } else {
           NLSR_LOG_DEBUG("wireDecode: Unknown Service Function sub-element type: " << it->type());
         }
@@ -279,7 +324,10 @@ NameLsa::wireDecode(const ndn::Block& wire)
         serviceFunctionCount++;
         NLSR_LOG_DEBUG("wireDecode: Stored Service Function info: " << serviceName 
                       << " -> processingTime=" << sfInfo.processingTime
-                      << ", load=" << sfInfo.load << ", usageCount=" << sfInfo.usageCount);
+                      << ", load=" << sfInfo.load << ", usageCount=" << sfInfo.usageCount
+                      << ", processingWeight=" << sfInfo.processingWeight
+                      << ", loadWeight=" << sfInfo.loadWeight
+                      << ", usageWeight=" << sfInfo.usageWeight);
       } else {
         NLSR_LOG_WARN("wireDecode: Service Function name is empty, skipping");
       }
@@ -295,7 +343,10 @@ NameLsa::wireDecode(const ndn::Block& wire)
   for (const auto& [name, info] : m_serviceFunctionInfo) {
     NLSR_LOG_DEBUG("wireDecode: Final Service Function info: " << name 
                   << " -> processingTime=" << info.processingTime
-                  << ", load=" << info.load << ", usageCount=" << info.usageCount);
+                  << ", load=" << info.load << ", usageCount=" << info.usageCount
+                  << ", processingWeight=" << info.processingWeight
+                  << ", loadWeight=" << info.loadWeight
+                  << ", usageWeight=" << info.usageWeight);
   }
 }
 
