@@ -95,10 +95,12 @@ void
 RoutingTable::calculate()
 {
   m_lsdb.writeLog();
+  NLSR_LOG_DEBUG("RoutingTable::calculate() called");
   NLSR_LOG_TRACE("Calculating routing table");
 
   if (m_isRoutingTableCalculating == false) {
     m_isRoutingTableCalculating = true;
+    NLSR_LOG_DEBUG("Starting routing table calculation (hyperbolicState=" << m_hyperbolicState << ")");
 
     if (m_hyperbolicState == HYPERBOLIC_STATE_OFF) {
       calculateLsRoutingTable();
@@ -113,8 +115,10 @@ RoutingTable::calculate()
 
     m_isRouteCalculationScheduled = false;
     m_isRoutingTableCalculating = false;
+    NLSR_LOG_DEBUG("Routing table calculation completed");
   }
   else {
+    NLSR_LOG_DEBUG("Routing table calculation already in progress, rescheduling");
     scheduleRoutingTableCalculation();
   }
 }
@@ -122,6 +126,7 @@ RoutingTable::calculate()
 void
 RoutingTable::calculateLsRoutingTable()
 {
+  NLSR_LOG_DEBUG("RoutingTable::calculateLsRoutingTable() called");
   NLSR_LOG_TRACE("CalculateLsRoutingTable Called");
 
   if (m_lsdb.getIsBuildAdjLsaScheduled()) {
@@ -132,9 +137,11 @@ RoutingTable::calculateLsRoutingTable()
   // We only check this in LS since we never remove our own Coordinate LSA,
   // whereas we remove our own Adjacency LSA if we don't have any neighbors
   if (!m_ownAdjLsaExist) {
+    NLSR_LOG_DEBUG("Own Adjacency LSA does not exist, skipping routing table calculation");
     return;
   }
 
+  NLSR_LOG_DEBUG("Clearing routing table and recalculating");
   clearRoutingTable();
 
   auto lsaRange = m_lsdb.getLsdbIterator<AdjLsa>();
@@ -143,9 +150,9 @@ RoutingTable::calculateLsRoutingTable()
 
   calculateLinkStateRoutingPath(map, *this, m_confParam, m_lsdb);
 
-  NLSR_LOG_DEBUG("Calling Update NPT With new Route");
+  NLSR_LOG_DEBUG("Calling Update NPT With new Route (afterRoutingChange)");
   afterRoutingChange(m_rTable);
-  NLSR_LOG_DEBUG(*this);
+  NLSR_LOG_DEBUG("Routing table calculation completed. Routing table:\n" << *this);
 }
 
 void

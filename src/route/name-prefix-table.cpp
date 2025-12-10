@@ -71,15 +71,23 @@ NamePrefixTable::updateFromLsdb(std::shared_ptr<Lsa> lsa, LsdbUpdate updateType,
                                 const std::list<nlsr::PrefixInfo>& namesToRemove)
 {
   if (m_ownRouterName == lsa->getOriginRouter()) {
+    NLSR_LOG_DEBUG("updateFromLsdb: Skipping own router's LSA");
     return;
   }
+  NLSR_LOG_DEBUG("updateFromLsdb called: router=" << lsa->getOriginRouter() 
+                << ", type=" << static_cast<int>(lsa->getType())
+                << ", updateType=" << static_cast<int>(updateType)
+                << ", namesToAdd=" << namesToAdd.size()
+                << ", namesToRemove=" << namesToRemove.size());
   NLSR_LOG_TRACE("Got update from Lsdb for router: " << lsa->getOriginRouter());
 
   if (updateType == LsdbUpdate::INSTALLED) {
+    NLSR_LOG_DEBUG("updateFromLsdb: LSA INSTALLED, adding router entry");
     addEntry(lsa->getOriginRouter(), lsa->getOriginRouter());
 
     if (lsa->getType() == Lsa::Type::NAME) {
       auto nlsa = std::static_pointer_cast<NameLsa>(lsa);
+      NLSR_LOG_DEBUG("updateFromLsdb: Processing NAME LSA with " << nlsa->getNpl().getPrefixInfo().size() << " prefixes");
       for (const auto &prefix : nlsa->getNpl().getPrefixInfo()) {
         if (prefix.getName() != m_ownRouterName) {
           m_nexthopCost[DestNameKey(lsa->getOriginRouter(), prefix.getName())] = prefix.getCost();
@@ -90,7 +98,51 @@ NamePrefixTable::updateFromLsdb(std::shared_ptr<Lsa> lsa, LsdbUpdate updateType,
   }
   else if (updateType == LsdbUpdate::UPDATED) {
     if (lsa->getType() != Lsa::Type::NAME) {
+      NLSR_LOG_DEBUG("updateFromLsdb: LSA UPDATED but not NAME type, skipping");
       return;
+    }
+
+    auto nlsa = std::static_pointer_cast<NameLsa>(lsa);
+    NLSR_LOG_DEBUG("updateFromLsdb: NAME LSA UPDATED, checking for Service Function info changes");
+    
+    // Check if Service Function information has changed
+    // If Service Function info changed, we need to update the FIB for existing entries
+    auto existingLsa = m_lsdb.findLsa<NameLsa>(lsa->getOriginRouter());
+    if (existingLsa) {
+      const auto& allSfInfo = nlsa->getAllServiceFunctionInfo();
+      bool sfInfoChanged = false;
+      for (const auto& [serviceName, newSfInfo] : allSfInfo) {
+        ServiceFunctionInfo oldSfInfo = existingLsa->getServiceFunctionInfo(serviceName);
+        if (oldSfInfo.processingTime != newSfInfo.processingTime ||
+            oldSfInfo.load != newSfInfo.load ||
+            oldSfInfo.usageCount != newSfInfo.usageCount) {
+          sfInfoChanged = true;
+          NLSR_LOG_DEBUG("updateFromLsdb: Service Function info changed for " << serviceName.toUri()
+                        << ": old processingTime=" << oldSfInfo.processingTime
+                        << ", new processingTime=" << newSfInfo.processingTime);
+          break;
+        }
+      }
+      
+      // If Service Function info changed, update existing entries to recalculate FunctionCost
+      if (sfInfoChanged) {
+        NLSR_LOG_DEBUG("updateFromLsdb: Service Function info changed, updating existing entries");
+        // Find all entries for this router and update them
+        for (auto& entry : m_table) {
+          auto rtpeList = entry->getRteList();
+          for (const auto& rtpe : rtpeList) {
+            if (rtpe->getDestination() == lsa->getOriginRouter()) {
+              NLSR_LOG_DEBUG("updateFromLsdb: Updating entry for prefix=" << entry->getNamePrefix()
+                           << ", router=" << lsa->getOriginRouter());
+              entry->generateNhlfromRteList();
+              if (entry->getNexthopList().size() > 0) {
+                m_fib.update(entry->getNamePrefix(), 
+                            adjustNexthopCosts(entry->getNexthopList(), entry->getNamePrefix(), lsa->getOriginRouter()));
+              }
+            }
+          }
+        }
+      }
     }
 
     for (const auto &prefix : namesToAdd) {
@@ -201,6 +253,7 @@ NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& 
 void
 NamePrefixTable::addEntry(const ndn::Name& name, const ndn::Name& destRouter)
 {
+  NLSR_LOG_DEBUG("NamePrefixTable::addEntry called: name=" << name << ", destRouter=" << destRouter);
   // Check if the advertised name prefix is in the table already.
   auto nameItr = std::find_if(m_table.begin(), m_table.end(),
                               [&] (const auto& entry) { return name == entry->getNamePrefix(); });
