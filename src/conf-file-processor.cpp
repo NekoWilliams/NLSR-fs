@@ -734,6 +734,7 @@ ConfFileProcessor::processConfSectionServiceFunction(const ConfigSection& sectio
           ndn::Name functionPrefix(functionPrefixStr);
           m_confParam.addServiceFunctionPrefix(functionPrefix);
           foundFunctionPrefix = true;
+          std::cerr << "Added service function prefix: " << functionPrefix << std::endl;
         }
       } catch (const std::exception& e) {
         std::cerr << "Error parsing function-prefix: " << e.what() << std::endl;
@@ -744,6 +745,14 @@ ConfFileProcessor::processConfSectionServiceFunction(const ConfigSection& sectio
   // If no function-prefix was specified, add default /relay for backward compatibility
   if (!foundFunctionPrefix) {
     m_confParam.addServiceFunctionPrefix(ndn::Name("/relay"));
+    std::cerr << "No function-prefix specified, using default: /relay" << std::endl;
+  }
+  
+  // Debug: Print all registered prefixes
+  const auto& prefixes = m_confParam.getServiceFunctionPrefixes();
+  std::cerr << "Total service function prefixes registered: " << prefixes.size() << std::endl;
+  for (const auto& prefix : prefixes) {
+    std::cerr << "  - " << prefix << std::endl;
   }
   
     return true;
