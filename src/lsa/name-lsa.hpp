@@ -114,6 +114,10 @@ public:
 
   void setServiceFunctionInfo(const ndn::Name& name, const ServiceFunctionInfo& info);
   ServiceFunctionInfo getServiceFunctionInfo(const ndn::Name& name) const;
+  
+  // Debug helper methods
+  size_t getServiceFunctionInfoMapSize() const;
+  const std::map<ndn::Name, ServiceFunctionInfo>& getAllServiceFunctionInfo() const;
 
 private:
   void

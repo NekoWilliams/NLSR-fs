@@ -138,6 +138,16 @@ NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& 
   auto nameLsa = m_lsdb.findLsa<NameLsa>(destRouterName);
   if (nameLsa) {
     NLSR_LOG_DEBUG("NameLSA found for " << destRouterName);
+    
+    // Debug: Check NameLSA's Service Function info map
+    NLSR_LOG_DEBUG("NameLSA Service Function info map size: " << nameLsa->getServiceFunctionInfoMapSize());
+    const auto& allSfInfo = nameLsa->getAllServiceFunctionInfo();
+    for (const auto& [sfName, sfInfo] : allSfInfo) {
+      NLSR_LOG_DEBUG("  NameLSA has Service Function: " << sfName 
+                    << " -> processingTime=" << sfInfo.processingTime
+                    << ", load=" << sfInfo.load << ", usageCount=" << sfInfo.usageCount);
+    }
+    
     ServiceFunctionInfo sfInfo = nameLsa->getServiceFunctionInfo(nameToCheck);
     
     NLSR_LOG_DEBUG("ServiceFunctionInfo for " << nameToCheck << ": processingTime=" << sfInfo.processingTime

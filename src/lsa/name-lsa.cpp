@@ -80,8 +80,24 @@ NameLsa::setServiceFunctionInfo(const ndn::Name& name, const ServiceFunctionInfo
 ServiceFunctionInfo
 NameLsa::getServiceFunctionInfo(const ndn::Name& name) const
 {
+  NLSR_LOG_DEBUG("getServiceFunctionInfo called: name=" << name);
+  NLSR_LOG_DEBUG("m_serviceFunctionInfo map size: " << m_serviceFunctionInfo.size());
+  
+  // Debug: Print all entries in the map
+  for (const auto& [mapName, info] : m_serviceFunctionInfo) {
+    NLSR_LOG_DEBUG("  Map entry: " << mapName << " -> processingTime=" << info.processingTime
+                  << ", load=" << info.load << ", usageCount=" << info.usageCount);
+  }
+  
   auto it = m_serviceFunctionInfo.find(name);
-  return (it != m_serviceFunctionInfo.end()) ? it->second : ServiceFunctionInfo{};
+  if (it != m_serviceFunctionInfo.end()) {
+    NLSR_LOG_DEBUG("Service Function info found for " << name << ": processingTime=" << it->second.processingTime
+                  << ", load=" << it->second.load << ", usageCount=" << it->second.usageCount);
+    return it->second;
+  } else {
+    NLSR_LOG_DEBUG("Service Function info NOT found for " << name << " in map");
+    return ServiceFunctionInfo{};
+  }
 }
 
 template<ndn::encoding::Tag TAG>
@@ -319,6 +335,18 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
   }
 
   return {updated, namesToAdd, namesToRemove};
+}
+
+size_t
+NameLsa::getServiceFunctionInfoMapSize() const
+{
+  return m_serviceFunctionInfo.size();
+}
+
+const std::map<ndn::Name, ServiceFunctionInfo>&
+NameLsa::getAllServiceFunctionInfo() const
+{
+  return m_serviceFunctionInfo;
 }
 
 } // namespace nlsr
