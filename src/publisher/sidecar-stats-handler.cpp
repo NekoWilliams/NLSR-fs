@@ -399,12 +399,12 @@ SidecarStatsHandler::parseSidecarLogWithTimeWindow(uint32_t windowSeconds) const
       return logEntries;
     }
     
-    // Helper function to parse timestamp string to time_point
-    auto parseTimestampToTimePoint = [](const std::string& timestamp) -> std::chrono::system_clock::time_point {
+    // Helper function to parse timestamp string to time_point (ndn::time::system_clock)
+    auto parseTimestampToTimePoint = [](const std::string& timestamp) -> ndn::time::system_clock::time_point {
       try {
         // Format: "2025-11-12 02:58:50.676086"
         if (timestamp.length() < 19) {
-          return std::chrono::system_clock::time_point::min();
+          return ndn::time::system_clock::time_point::min();
         }
         
         int year = std::stoi(timestamp.substr(0, 4));
@@ -436,20 +436,20 @@ SidecarStatsHandler::parseSidecarLogWithTimeWindow(uint32_t windowSeconds) const
         timeinfo.tm_sec = second;
         
         std::time_t time = std::mktime(&timeinfo);
-        auto timePoint = std::chrono::system_clock::from_time_t(time);
-        timePoint += std::chrono::microseconds(microsecond);
+        auto timePoint = ndn::time::system_clock::from_time_t(time);
+        timePoint += boost::chrono::microseconds(microsecond);
         
         return timePoint;
       } catch (const std::exception&) {
-        return std::chrono::system_clock::time_point::min();
+        return ndn::time::system_clock::time_point::min();
       }
     };
     
     // First pass: Read all entries and find the latest timestamp
-    std::vector<std::pair<std::map<std::string, std::string>, std::chrono::system_clock::time_point>> allEntries;
+    std::vector<std::pair<std::map<std::string, std::string>, ndn::time::system_clock::time_point>> allEntries;
     std::string line;
     int lineCount = 0;
-    auto latestTimestamp = std::chrono::system_clock::time_point::min();
+    auto latestTimestamp = ndn::time::system_clock::time_point::min();
     
     // Read all lines and parse timestamps
     while (std::getline(logFile, line)) {
@@ -550,18 +550,18 @@ SidecarStatsHandler::parseSidecarLogWithTimeWindow(uint32_t windowSeconds) const
           
           if (!timeStr.empty()) {
             auto entryTime = parseTimestampToTimePoint(timeStr);
-            if (entryTime != std::chrono::system_clock::time_point::min()) {
+            if (entryTime != ndn::time::system_clock::time_point::min()) {
               allEntries.push_back({entry, entryTime});
               if (entryTime > latestTimestamp) {
                 latestTimestamp = entryTime;
               }
             } else {
               // If timestamp parsing failed, include the entry with min timestamp (will be filtered out)
-              allEntries.push_back({entry, std::chrono::system_clock::time_point::min()});
+              allEntries.push_back({entry, ndn::time::system_clock::time_point::min()});
             }
           } else {
             // If no timestamp available, include the entry with min timestamp (will be filtered out)
-            allEntries.push_back({entry, std::chrono::system_clock::time_point::min()});
+            allEntries.push_back({entry, ndn::time::system_clock::time_point::min()});
           }
         }
       } catch (const std::exception& e) {
@@ -571,17 +571,17 @@ SidecarStatsHandler::parseSidecarLogWithTimeWindow(uint32_t windowSeconds) const
     }
     
     // Second pass: Filter entries based on time window relative to latest timestamp
-    if (latestTimestamp == std::chrono::system_clock::time_point::min()) {
+    if (latestTimestamp == ndn::time::system_clock::time_point::min()) {
       NLSR_LOG_DEBUG("No valid timestamps found in log entries");
       return logEntries;
     }
     
     // Calculate time window: from (latestTimestamp - windowSeconds) to latestTimestamp
-    auto windowStart = latestTimestamp - std::chrono::seconds(windowSeconds);
+    auto windowStart = latestTimestamp - boost::chrono::seconds(windowSeconds);
     int entriesInWindow = 0;
     
-    NLSR_LOG_DEBUG("Latest entry timestamp: " << std::chrono::duration_cast<std::chrono::seconds>(latestTimestamp.time_since_epoch()).count()
-                  << ", window start: " << std::chrono::duration_cast<std::chrono::seconds>(windowStart.time_since_epoch()).count()
+    NLSR_LOG_DEBUG("Latest entry timestamp: " << boost::chrono::duration_cast<boost::chrono::seconds>(latestTimestamp.time_since_epoch()).count()
+                  << ", window start: " << boost::chrono::duration_cast<boost::chrono::seconds>(windowStart.time_since_epoch()).count()
                   << ", window duration: " << windowSeconds << " seconds");
     
     for (const auto& [entry, entryTime] : allEntries) {
@@ -740,10 +740,10 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo() const
   
   // Find the latest entry timestamp to set lastUpdateTime
   // This is done by parsing all entries again to find the latest timestamp
-  auto parseTimestampToTimePoint = [](const std::string& timestamp) -> std::chrono::system_clock::time_point {
+  auto parseTimestampToTimePoint = [](const std::string& timestamp) -> ndn::time::system_clock::time_point {
     try {
       if (timestamp.length() < 19) {
-        return std::chrono::system_clock::time_point::min();
+        return ndn::time::system_clock::time_point::min();
       }
       
       int year = std::stoi(timestamp.substr(0, 4));
@@ -774,16 +774,16 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo() const
       timeinfo.tm_sec = second;
       
       std::time_t time = std::mktime(&timeinfo);
-      auto timePoint = std::chrono::system_clock::from_time_t(time);
-      timePoint += std::chrono::microseconds(microsecond);
+      auto timePoint = ndn::time::system_clock::from_time_t(time);
+      timePoint += boost::chrono::microseconds(microsecond);
       
       return timePoint;
     } catch (const std::exception&) {
-      return std::chrono::system_clock::time_point::min();
+      return ndn::time::system_clock::time_point::min();
     }
   };
   
-  auto latestTimestamp = std::chrono::system_clock::time_point::min();
+  auto latestTimestamp = ndn::time::system_clock::time_point::min();
   for (const auto& entry : entries) {
     std::string timeStr;
     if (entry.find("service_call_in_time") != entry.end()) {
@@ -794,21 +794,21 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo() const
     
     if (!timeStr.empty()) {
       auto entryTime = parseTimestampToTimePoint(timeStr);
-      if (entryTime != std::chrono::system_clock::time_point::min() && entryTime > latestTimestamp) {
+      if (entryTime != ndn::time::system_clock::time_point::min() && entryTime > latestTimestamp) {
         latestTimestamp = entryTime;
       }
     }
   }
   
   // Set lastUpdateTime to the latest entry timestamp
-  if (latestTimestamp != std::chrono::system_clock::time_point::min()) {
+  if (latestTimestamp != ndn::time::system_clock::time_point::min()) {
     info.lastUpdateTime = latestTimestamp;
   }
   
   // Check if the latest entry is too old (more than windowSeconds * 2 ago)
   // If so, set processingTime to 0
-  auto now = std::chrono::system_clock::now();
-  auto timeSinceLastUpdate = std::chrono::duration_cast<std::chrono::seconds>(now - latestTimestamp).count();
+  auto now = ndn::time::system_clock::now();
+  auto timeSinceLastUpdate = boost::chrono::duration_cast<boost::chrono::seconds>(now - latestTimestamp).count();
   uint32_t staleThreshold = windowSeconds * 2;  // Consider stale if older than 2x window
   
   if (timeSinceLastUpdate > static_cast<int64_t>(staleThreshold)) {
@@ -823,7 +823,7 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo() const
   
   NLSR_LOG_DEBUG("ServiceFunctionInfo: utilization=" << info.processingTime 
                  << " (calculated from " << entries.size() << " entries, lastUpdateTime: " 
-                 << std::chrono::duration_cast<std::chrono::seconds>(latestTimestamp.time_since_epoch()).count() << ")");
+                 << boost::chrono::duration_cast<boost::chrono::seconds>(latestTimestamp.time_since_epoch()).count() << ")");
   
   return info;
 }
