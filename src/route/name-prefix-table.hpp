@@ -52,7 +52,7 @@ public:
   ~NamePrefixTable();
 
   NexthopList
-  adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& nameToCheck, const ndn::Name& destRouterName);
+  adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& nameToCheck, const NamePrefixTableEntry& npte);
 
   /*! \brief Add, update, or remove Names according to the Lsdb update
     \param lsa The LSA class pointer

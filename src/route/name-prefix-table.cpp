@@ -134,7 +134,7 @@ NamePrefixTable::updateFromLsdb(std::shared_ptr<Lsa> lsa, LsdbUpdate updateType,
             entry->generateNhlfromRteList();
             if (entry->getNexthopList().size() > 0) {
               m_fib.update(entry->getNamePrefix(), 
-                          adjustNexthopCosts(entry->getNexthopList(), entry->getNamePrefix(), lsa->getOriginRouter()));
+                          adjustNexthopCosts(entry->getNexthopList(), entry->getNamePrefix(), *entry));
             }
           }
         }
@@ -170,72 +170,66 @@ NamePrefixTable::updateFromLsdb(std::shared_ptr<Lsa> lsa, LsdbUpdate updateType,
 }
 
 NexthopList
-NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& nameToCheck, const ndn::Name& destRouterName)
+NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& nameToCheck, const NamePrefixTableEntry& npte)
 {
   NexthopList new_nhList;
   
-  NLSR_LOG_DEBUG("adjustNexthopCosts called: nameToCheck=" << nameToCheck 
-                << ", destRouterName=" << destRouterName);
+  NLSR_LOG_DEBUG("adjustNexthopCosts called: nameToCheck=" << nameToCheck);
   
-  // Calculate FunctionCost for service function prefix if applicable
-  // NameLSAに含まれるService Function情報を信頼できるソースとして使用
-  // 設定ファイルのfunction-prefixリストに依存しない
-  double functionCost = 0.0;
-  
-  // Get Service Function information from the destination router's NameLSA
-  auto nameLsa = m_lsdb.findLsa<NameLsa>(destRouterName);
-  if (nameLsa) {
-    NLSR_LOG_DEBUG("NameLSA found for " << destRouterName);
+  // 各RoutingTablePoolEntryに対して個別にFunctionCostを計算
+  // これにより、各NextHopがどのdestRouterNameに対応するかを正確に判断できる
+  for (const auto& rtpe : npte.getRteList()) {
+    const ndn::Name& destRouterName = rtpe->getDestination();
+    NLSR_LOG_DEBUG("Processing RoutingTablePoolEntry for destRouterName=" << destRouterName);
     
-    // Debug: Check NameLSA's Service Function info map
-    NLSR_LOG_DEBUG("NameLSA Service Function info map size: " << nameLsa->getServiceFunctionInfoMapSize());
-    const auto& allSfInfo = nameLsa->getAllServiceFunctionInfo();
-    for (const auto& [sfName, sfInfo] : allSfInfo) {
-      NLSR_LOG_DEBUG("  NameLSA has Service Function: " << sfName 
-                    << " -> processingTime=" << sfInfo.processingTime
-                    << ", load=" << sfInfo.load << ", usageCount=" << sfInfo.usageCount);
-    }
-    
-    ServiceFunctionInfo sfInfo = nameLsa->getServiceFunctionInfo(nameToCheck);
-    
-    NLSR_LOG_DEBUG("ServiceFunctionInfo for " << nameToCheck << ": processingTime=" << sfInfo.processingTime
-                  << ", load=" << sfInfo.load << ", usageCount=" << sfInfo.usageCount
-                  << ", processingWeight=" << sfInfo.processingWeight
-                  << ", loadWeight=" << sfInfo.loadWeight
-                  << ", usageWeight=" << sfInfo.usageWeight);
-    
-    // Calculate function cost if Service Function info is available
-    // NameLSAにService Function情報が存在する場合、そのプレフィックスはサービスファンクションと判断
-    // weight情報は、サービスファンクションを持つノード（destRouterName）の設定ファイルから取得
-    // NameLSAに含まれるweight情報を使用する
-    if (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {
-      NLSR_LOG_DEBUG("Service Function info found in NameLSA for " << nameToCheck 
-                    << ", calculating FunctionCost");
+    // destRouterNameのNameLSAからFunctionCostを計算
+    double functionCost = 0.0;
+    auto nameLsa = m_lsdb.findLsa<NameLsa>(destRouterName);
+    if (nameLsa) {
+      NLSR_LOG_DEBUG("NameLSA found for " << destRouterName);
       
-      // NameLSAから取得したweight情報を使用（サービスファンクションを持つノードの設定ファイルの値）
-      double processingWeight = sfInfo.processingWeight;
-      double loadWeight = sfInfo.loadWeight;
-      double usageWeight = sfInfo.usageWeight;
+      ServiceFunctionInfo sfInfo = nameLsa->getServiceFunctionInfo(nameToCheck);
       
-      NLSR_LOG_DEBUG("Weights from NameLSA (node " << destRouterName << "): processing=" << processingWeight 
-                    << ", load=" << loadWeight << ", usage=" << usageWeight);
+      NLSR_LOG_DEBUG("ServiceFunctionInfo for " << nameToCheck << " (destRouterName=" << destRouterName 
+                    << "): processingTime=" << sfInfo.processingTime
+                    << ", load=" << sfInfo.load << ", usageCount=" << sfInfo.usageCount
+                    << ", processingWeight=" << sfInfo.processingWeight
+                    << ", loadWeight=" << sfInfo.loadWeight
+                    << ", usageWeight=" << sfInfo.usageWeight);
       
-      functionCost = sfInfo.processingTime * processingWeight +
-                    sfInfo.load * loadWeight +
-                    (sfInfo.usageCount / 100.0) * usageWeight;
-      
-      NLSR_LOG_DEBUG("FunctionCost calculated for " << nameToCheck << " prefix to " << destRouterName 
-                    << ": processingTime=" << sfInfo.processingTime 
-                    << ", functionCost=" << functionCost);
+      // Calculate function cost if Service Function info is available
+      // NameLSAにService Function情報が存在する場合、そのプレフィックスはサービスファンクションと判断
+      // weight情報は、サービスファンクションを持つノード（destRouterName）の設定ファイルから取得
+      // NameLSAに含まれるweight情報を使用する
+      if (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {
+        NLSR_LOG_DEBUG("Service Function info found in NameLSA for " << nameToCheck 
+                      << " (destRouterName=" << destRouterName << "), calculating FunctionCost");
+        
+        // NameLSAから取得したweight情報を使用（サービスファンクションを持つノードの設定ファイルの値）
+        double processingWeight = sfInfo.processingWeight;
+        double loadWeight = sfInfo.loadWeight;
+        double usageWeight = sfInfo.usageWeight;
+        
+        NLSR_LOG_DEBUG("Weights from NameLSA (node " << destRouterName << "): processing=" << processingWeight 
+                      << ", load=" << loadWeight << ", usage=" << usageWeight);
+        
+        functionCost = sfInfo.processingTime * processingWeight +
+                      sfInfo.load * loadWeight +
+                      (sfInfo.usageCount / 100.0) * usageWeight;
+        
+        NLSR_LOG_DEBUG("FunctionCost calculated for " << nameToCheck << " prefix to " << destRouterName 
+                      << ": processingTime=" << sfInfo.processingTime 
+                      << ", functionCost=" << functionCost);
+      } else {
+        NLSR_LOG_DEBUG("No Service Function info in NameLSA for " << nameToCheck 
+                      << " (destRouterName=" << destRouterName << ", all values are zero)");
+      }
     } else {
-      NLSR_LOG_DEBUG("No Service Function info in NameLSA for " << nameToCheck 
-                    << " (all values are zero)");
+      NLSR_LOG_DEBUG("NameLSA not found for " << destRouterName);
     }
-  } else {
-    NLSR_LOG_DEBUG("NameLSA not found for " << destRouterName);
-  }
-  
-  for (const auto& nh : nhlist.getNextHops()) {
+    
+    // このRoutingTablePoolEntryのNextHopに対してFunctionCostを適用
+    for (const auto& nh : rtpe->getNexthopList().getNextHops()) {
       double originalCost = nh.getRouteCost();
       double nexthopCost = m_nexthopCost[DestNameKey(destRouterName, nameToCheck)];
       double adjustedCost = originalCost + nexthopCost + functionCost;
@@ -248,7 +242,9 @@ NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& 
       
       const NextHop newNextHop = NextHop(nh.getConnectingFaceUri(), adjustedCost);
       new_nhList.addNextHop(newNextHop);
+    }
   }
+  
   return new_nhList;
 }
 
@@ -302,7 +298,7 @@ NamePrefixTable::addEntry(const ndn::Name& name, const ndn::Name& destRouter)
     // If this entry has next hops, we need to inform the FIB
     if (npte->getNexthopList().size() > 0) {
       NLSR_LOG_TRACE("Updating FIB with next hops for " << npte->getNamePrefix());
-      m_fib.update(name, adjustNexthopCosts(npte->getNexthopList(), name, destRouter));
+      m_fib.update(name, adjustNexthopCosts(npte->getNexthopList(), name, *npte));
     }
     // The routing table may recalculate and add a routing table entry
     // with no next hops to replace an existing routing table entry. In
@@ -324,7 +320,7 @@ NamePrefixTable::addEntry(const ndn::Name& name, const ndn::Name& destRouter)
 
     if ((*nameItr)->getNexthopList().size() > 0) {
       NLSR_LOG_TRACE("Updating FIB with next hops for " << (**nameItr));
-      m_fib.update(name, adjustNexthopCosts((*nameItr)->getNexthopList(), name, destRouter));
+      m_fib.update(name, adjustNexthopCosts((*nameItr)->getNexthopList(), name, **nameItr));
     }
     else {
       NLSR_LOG_TRACE(npte->getNamePrefix() << " has no next hops; removing from FIB");
@@ -392,7 +388,7 @@ NamePrefixTable::removeEntry(const ndn::Name& name, const ndn::Name& destRouter)
       NLSR_LOG_TRACE(**nameItr << " has other routing table entries;"
                      << " updating FIB with next hops");
       (*nameItr)->generateNhlfromRteList();
-      m_fib.update(name, adjustNexthopCosts((*nameItr)->getNexthopList(), name, destRouter));
+      m_fib.update(name, adjustNexthopCosts((*nameItr)->getNexthopList(), name, **nameItr));
     }
   }
   else {
