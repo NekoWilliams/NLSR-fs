@@ -221,13 +221,13 @@ NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& 
       bool isStale = false;
       if (sfInfo.lastUpdateTime != ndn::time::system_clock::time_point::min()) {
         auto now = ndn::time::system_clock::now();
-        auto timeSinceLastUpdate = std::chrono::duration_cast<std::chrono::seconds>(now - sfInfo.lastUpdateTime).count();
+        auto timeSinceLastUpdate = boost::chrono::duration_cast<boost::chrono::seconds>(now - sfInfo.lastUpdateTime).count();
         uint32_t staleThreshold = m_confParam.getUtilizationWindowSeconds() * 2;  // 2x window duration
         
         if (timeSinceLastUpdate > static_cast<int64_t>(staleThreshold)) {
           isStale = true;
           NLSR_LOG_DEBUG("Service Function info is stale (lastUpdateTime: " 
-                        << std::chrono::duration_cast<std::chrono::seconds>(sfInfo.lastUpdateTime.time_since_epoch()).count()
+                        << boost::chrono::duration_cast<boost::chrono::seconds>(sfInfo.lastUpdateTime.time_since_epoch()).count()
                         << ", timeSinceLastUpdate: " << timeSinceLastUpdate << "s, threshold: " << staleThreshold << "s)");
         }
       }
