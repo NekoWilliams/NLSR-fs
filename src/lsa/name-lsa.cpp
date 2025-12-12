@@ -392,7 +392,13 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
   }
 
   // Check for Service Function information changes
+  NLSR_LOG_DEBUG("NameLsa::update: Existing m_serviceFunctionInfo size: " << m_serviceFunctionInfo.size()
+                << ", New nlsa->m_serviceFunctionInfo size: " << nlsa->m_serviceFunctionInfo.size());
+  
   for (const auto& [serviceName, newSfInfo] : nlsa->m_serviceFunctionInfo) {
+    NLSR_LOG_DEBUG("NameLsa::update: Processing Service Function info for " << serviceName.toUri()
+                  << ": processingTime=" << newSfInfo.processingTime
+                  << ", processingWeight=" << newSfInfo.processingWeight);
     auto it = m_serviceFunctionInfo.find(serviceName);
     if (it == m_serviceFunctionInfo.end()) {
       // New Service Function information
@@ -404,28 +410,40 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
       const auto& oldSfInfo = it->second;
       if (oldSfInfo.processingTime != newSfInfo.processingTime ||
           oldSfInfo.load != newSfInfo.load ||
-          oldSfInfo.usageCount != newSfInfo.usageCount) {
+          oldSfInfo.usageCount != newSfInfo.usageCount ||
+          oldSfInfo.processingWeight != newSfInfo.processingWeight ||
+          oldSfInfo.loadWeight != newSfInfo.loadWeight ||
+          oldSfInfo.usageWeight != newSfInfo.usageWeight) {
         m_serviceFunctionInfo[serviceName] = newSfInfo;
         updated = true;
         NLSR_LOG_DEBUG("Service Function info updated for " << serviceName.toUri()
                       << ": processingTime=" << newSfInfo.processingTime
                       << ", load=" << newSfInfo.load
-                      << ", usageCount=" << newSfInfo.usageCount);
+                      << ", usageCount=" << newSfInfo.usageCount
+                      << ", processingWeight=" << newSfInfo.processingWeight);
       }
     }
   }
 
   // Check for removed Service Function information
-  for (auto it = m_serviceFunctionInfo.begin(); it != m_serviceFunctionInfo.end();) {
-    if (nlsa->m_serviceFunctionInfo.find(it->first) == nlsa->m_serviceFunctionInfo.end()) {
-      NLSR_LOG_DEBUG("Service Function info removed for " << it->first.toUri());
-      it = m_serviceFunctionInfo.erase(it);
-      updated = true;
-    } else {
-      ++it;
+  // Only remove if the new NameLSA explicitly does not contain the Service Function info
+  // If the new NameLSA's m_serviceFunctionInfo is empty, we should preserve existing info
+  // (This can happen if wireDecode failed to decode Service Function info, but we don't want to lose existing info)
+  if (!nlsa->m_serviceFunctionInfo.empty()) {
+    for (auto it = m_serviceFunctionInfo.begin(); it != m_serviceFunctionInfo.end();) {
+      if (nlsa->m_serviceFunctionInfo.find(it->first) == nlsa->m_serviceFunctionInfo.end()) {
+        NLSR_LOG_DEBUG("Service Function info removed for " << it->first.toUri());
+        it = m_serviceFunctionInfo.erase(it);
+        updated = true;
+      } else {
+        ++it;
+      }
     }
+  } else {
+    NLSR_LOG_DEBUG("NameLsa::update: New NameLSA has empty m_serviceFunctionInfo, preserving existing info");
   }
 
+  NLSR_LOG_DEBUG("NameLsa::update: Final m_serviceFunctionInfo size: " << m_serviceFunctionInfo.size());
   return {updated, namesToAdd, namesToRemove};
 }
 

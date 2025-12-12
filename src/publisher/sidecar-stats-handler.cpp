@@ -399,10 +399,6 @@ SidecarStatsHandler::parseSidecarLogWithTimeWindow(uint32_t windowSeconds) const
       return logEntries;
     }
     
-    // Calculate time window start (current time - windowSeconds)
-    auto now = std::chrono::system_clock::now();
-    auto windowStart = now - std::chrono::seconds(windowSeconds);
-    
     // Helper function to parse timestamp string to time_point
     auto parseTimestampToTimePoint = [](const std::string& timestamp) -> std::chrono::system_clock::time_point {
       try {
@@ -449,11 +445,13 @@ SidecarStatsHandler::parseSidecarLogWithTimeWindow(uint32_t windowSeconds) const
       }
     };
     
+    // First pass: Read all entries and find the latest timestamp
+    std::vector<std::pair<std::map<std::string, std::string>, std::chrono::system_clock::time_point>> allEntries;
     std::string line;
     int lineCount = 0;
-    int entriesInWindow = 0;
+    auto latestTimestamp = std::chrono::system_clock::time_point::min();
     
-    // Read all lines and filter by time window
+    // Read all lines and parse timestamps
     while (std::getline(logFile, line)) {
       lineCount++;
       try {
@@ -540,7 +538,7 @@ SidecarStatsHandler::parseSidecarLogWithTimeWindow(uint32_t windowSeconds) const
           }
         }
         
-        // Check if entry is within time window
+        // Store entry with its timestamp
         if (!entry.empty()) {
           // Use service_call_in_time if available, otherwise use sidecar_in_time
           std::string timeStr;
@@ -552,14 +550,18 @@ SidecarStatsHandler::parseSidecarLogWithTimeWindow(uint32_t windowSeconds) const
           
           if (!timeStr.empty()) {
             auto entryTime = parseTimestampToTimePoint(timeStr);
-            if (entryTime >= windowStart && entryTime <= now) {
-              logEntries.push_back(entry);
-              entriesInWindow++;
+            if (entryTime != std::chrono::system_clock::time_point::min()) {
+              allEntries.push_back({entry, entryTime});
+              if (entryTime > latestTimestamp) {
+                latestTimestamp = entryTime;
+              }
+            } else {
+              // If timestamp parsing failed, include the entry with min timestamp (will be filtered out)
+              allEntries.push_back({entry, std::chrono::system_clock::time_point::min()});
             }
           } else {
-            // If no timestamp available, include the entry (fallback)
-            logEntries.push_back(entry);
-            entriesInWindow++;
+            // If no timestamp available, include the entry with min timestamp (will be filtered out)
+            allEntries.push_back({entry, std::chrono::system_clock::time_point::min()});
           }
         }
       } catch (const std::exception& e) {
@@ -568,7 +570,29 @@ SidecarStatsHandler::parseSidecarLogWithTimeWindow(uint32_t windowSeconds) const
       }
     }
     
-    NLSR_LOG_DEBUG("Parsed " << entriesInWindow << " entries within time window (total lines: " << lineCount << ")");
+    // Second pass: Filter entries based on time window relative to latest timestamp
+    if (latestTimestamp == std::chrono::system_clock::time_point::min()) {
+      NLSR_LOG_DEBUG("No valid timestamps found in log entries");
+      return logEntries;
+    }
+    
+    // Calculate time window: from (latestTimestamp - windowSeconds) to latestTimestamp
+    auto windowStart = latestTimestamp - std::chrono::seconds(windowSeconds);
+    int entriesInWindow = 0;
+    
+    NLSR_LOG_DEBUG("Latest entry timestamp: " << std::chrono::duration_cast<std::chrono::seconds>(latestTimestamp.time_since_epoch()).count()
+                  << ", window start: " << std::chrono::duration_cast<std::chrono::seconds>(windowStart.time_since_epoch()).count()
+                  << ", window duration: " << windowSeconds << " seconds");
+    
+    for (const auto& [entry, entryTime] : allEntries) {
+      if (entryTime >= windowStart && entryTime <= latestTimestamp) {
+        logEntries.push_back(entry);
+        entriesInWindow++;
+      }
+    }
+    
+    NLSR_LOG_DEBUG("Parsed " << entriesInWindow << " entries within time window (total lines: " << lineCount 
+                  << ", total entries: " << allEntries.size() << ")");
   }
   catch (const std::exception& e) {
     NLSR_LOG_ERROR("Error reading log file: " + std::string(e.what()));
@@ -706,7 +730,7 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo() const
   uint32_t windowSeconds = m_confParam->getUtilizationWindowSeconds();
   NLSR_LOG_DEBUG("Calculating utilization with time window: " << windowSeconds << " seconds");
   
-  // Parse log entries within time window
+  // Parse log entries within time window (based on entry timestamps)
   auto entries = parseSidecarLogWithTimeWindow(windowSeconds);
   
   if (entries.empty()) {
@@ -714,11 +738,92 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo() const
     return info;
   }
   
+  // Find the latest entry timestamp to set lastUpdateTime
+  // This is done by parsing all entries again to find the latest timestamp
+  auto parseTimestampToTimePoint = [](const std::string& timestamp) -> std::chrono::system_clock::time_point {
+    try {
+      if (timestamp.length() < 19) {
+        return std::chrono::system_clock::time_point::min();
+      }
+      
+      int year = std::stoi(timestamp.substr(0, 4));
+      int month = std::stoi(timestamp.substr(5, 2));
+      int day = std::stoi(timestamp.substr(8, 2));
+      int hour = std::stoi(timestamp.substr(11, 2));
+      int minute = std::stoi(timestamp.substr(14, 2));
+      int second = std::stoi(timestamp.substr(17, 2));
+      int microsecond = 0;
+      
+      if (timestamp.length() > 19) {
+        std::string microsecStr = timestamp.substr(20);
+        if (!microsecStr.empty() && microsecStr.length() <= 6) {
+          while (microsecStr.length() < 6) {
+            microsecStr += "0";
+          }
+          microsecStr = microsecStr.substr(0, 6);
+          microsecond = std::stoi(microsecStr);
+        }
+      }
+      
+      std::tm timeinfo = {};
+      timeinfo.tm_year = year - 1900;
+      timeinfo.tm_mon = month - 1;
+      timeinfo.tm_mday = day;
+      timeinfo.tm_hour = hour;
+      timeinfo.tm_min = minute;
+      timeinfo.tm_sec = second;
+      
+      std::time_t time = std::mktime(&timeinfo);
+      auto timePoint = std::chrono::system_clock::from_time_t(time);
+      timePoint += std::chrono::microseconds(microsecond);
+      
+      return timePoint;
+    } catch (const std::exception&) {
+      return std::chrono::system_clock::time_point::min();
+    }
+  };
+  
+  auto latestTimestamp = std::chrono::system_clock::time_point::min();
+  for (const auto& entry : entries) {
+    std::string timeStr;
+    if (entry.find("service_call_in_time") != entry.end()) {
+      timeStr = entry.at("service_call_in_time");
+    } else if (entry.find("sidecar_in_time") != entry.end()) {
+      timeStr = entry.at("sidecar_in_time");
+    }
+    
+    if (!timeStr.empty()) {
+      auto entryTime = parseTimestampToTimePoint(timeStr);
+      if (entryTime != std::chrono::system_clock::time_point::min() && entryTime > latestTimestamp) {
+        latestTimestamp = entryTime;
+      }
+    }
+  }
+  
+  // Set lastUpdateTime to the latest entry timestamp
+  if (latestTimestamp != std::chrono::system_clock::time_point::min()) {
+    info.lastUpdateTime = latestTimestamp;
+  }
+  
+  // Check if the latest entry is too old (more than windowSeconds * 2 ago)
+  // If so, set processingTime to 0
+  auto now = std::chrono::system_clock::now();
+  auto timeSinceLastUpdate = std::chrono::duration_cast<std::chrono::seconds>(now - latestTimestamp).count();
+  uint32_t staleThreshold = windowSeconds * 2;  // Consider stale if older than 2x window
+  
+  if (timeSinceLastUpdate > static_cast<int64_t>(staleThreshold)) {
+    NLSR_LOG_DEBUG("Latest entry is too old (" << timeSinceLastUpdate << "s ago, threshold: " << staleThreshold 
+                  << "s), setting processingTime to 0");
+    info.processingTime = 0.0;
+    return info;
+  }
+  
   // Calculate utilization
   info.processingTime = calculateUtilization(entries, windowSeconds);
   
   NLSR_LOG_DEBUG("ServiceFunctionInfo: utilization=" << info.processingTime 
-                 << " (calculated from " << entries.size() << " entries)");
+                 << " (calculated from " << entries.size() << " entries, lastUpdateTime: " 
+                 << std::chrono::duration_cast<std::chrono::seconds>(latestTimestamp.time_since_epoch()).count() << ")");
   
   return info;
 }

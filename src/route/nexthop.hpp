@@ -77,18 +77,12 @@ public:
   uint64_t
   getRouteCostAsAdjustedInteger() const
   {
-    if (m_isHyperbolic) {
-      // Round the cost to better preserve decimal cost differences
-      // e.g. Without rounding: 12.3456 > 12.3454 -> 12345 = 12345
-      //      With rounding:    12.3456 > 12.3454 -> 12346 > 12345
-      return static_cast<uint64_t>(round(m_routeCost*HYPERBOLIC_COST_ADJUSTMENT_FACTOR));
-    }
-    else {
-      // For Link State routing, also use the adjustment factor to preserve decimal cost differences
-      // This is especially important for FunctionCost which can have small decimal values
-      // e.g. 25.132 -> 25132 (preserves 0.001 precision)
-      return static_cast<uint64_t>(round(m_routeCost*HYPERBOLIC_COST_ADJUSTMENT_FACTOR));
-    }
+    // Round the cost to better preserve decimal cost differences
+    // For Hyperbolic routing: e.g. Without rounding: 12.3456 > 12.3454 -> 12345 = 12345
+    //                        With rounding:    12.3456 > 12.3454 -> 12346 > 12345
+    // For Link State routing: This is especially important for FunctionCost which can have small decimal values
+    //                         e.g. 25.132 -> 25132 (preserves 0.001 precision)
+    return static_cast<uint64_t>(round(m_routeCost*HYPERBOLIC_COST_ADJUSTMENT_FACTOR));
   }
 
   double

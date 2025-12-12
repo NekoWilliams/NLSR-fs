@@ -293,9 +293,35 @@ Lsdb::installLsa(std::shared_ptr<Lsa> lsa)
     chkLsa->setSeqNo(lsa->getSeqNo());
     chkLsa->setExpirationTimePoint(lsa->getExpirationTimePoint());
 
+    // Log Service Function info before update
+    if (lsa->getType() == Lsa::Type::NAME) {
+      auto newNlsa = std::static_pointer_cast<NameLsa>(lsa);
+      auto existingNlsa = std::static_pointer_cast<NameLsa>(chkLsa);
+      NLSR_LOG_DEBUG("installLsa: Before update - existing m_serviceFunctionInfo size: " 
+                    << existingNlsa->getServiceFunctionInfoMapSize()
+                    << ", new m_serviceFunctionInfo size: " 
+                    << newNlsa->getServiceFunctionInfoMapSize());
+    }
+
     auto [updated, namesToAdd, namesToRemove] = chkLsa->update(lsa);
+    
+    // Log Service Function info after update
+    if (lsa->getType() == Lsa::Type::NAME) {
+      auto updatedNlsa = std::static_pointer_cast<NameLsa>(chkLsa);
+      NLSR_LOG_DEBUG("installLsa: After update - updated m_serviceFunctionInfo size: " 
+                    << updatedNlsa->getServiceFunctionInfoMapSize());
+      const auto& allSfInfo = updatedNlsa->getAllServiceFunctionInfo();
+      for (const auto& [serviceName, sfInfo] : allSfInfo) {
+        NLSR_LOG_DEBUG("installLsa: Updated Service Function info: " << serviceName.toUri()
+                      << " -> processingTime=" << sfInfo.processingTime
+                      << ", processingWeight=" << sfInfo.processingWeight);
+      }
+    }
+    
     if (updated) {
-      onLsdbModified(lsa, LsdbUpdate::UPDATED, namesToAdd, namesToRemove);
+      // Pass the updated LSA (chkLsa) instead of the new LSA (lsa)
+      // This ensures that updateFromLsdb receives the actual updated LSA from LSDB
+      onLsdbModified(chkLsa, LsdbUpdate::UPDATED, namesToAdd, namesToRemove);
     }
 
     chkLsa->setExpiringEventId(scheduleLsaExpiration(chkLsa, timeToExpire));
