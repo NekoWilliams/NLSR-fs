@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <list>
 #include <utility>
+#include <map>
 
 namespace nlsr {
 
@@ -181,9 +182,40 @@ NamePrefixTable::updateFromLsdb(std::shared_ptr<Lsa> lsa, LsdbUpdate updateType,
 NexthopList
 NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& nameToCheck, const NamePrefixTableEntry& npte)
 {
-  NexthopList new_nhList;
+  // サービスファンクションかどうかを判定
+  // NameLSAからPrefixInfoを取得して、isServiceFunctionフラグを確認
+  bool isServiceFunction = false;
   
-  NLSR_LOG_DEBUG("adjustNexthopCosts called: nameToCheck=" << nameToCheck);
+  for (const auto& rtpe : npte.getRteList()) {
+    const ndn::Name& destRouterName = rtpe->getDestination();
+    auto nameLsa = m_lsdb.findLsa<NameLsa>(destRouterName);
+    if (nameLsa) {
+      const auto& prefixInfoList = nameLsa->getNpl().getPrefixInfo();
+      for (const auto& prefixInfo : prefixInfoList) {
+        if (prefixInfo.getName() == nameToCheck) {
+          isServiceFunction = prefixInfo.isServiceFunction();
+          NLSR_LOG_DEBUG("Found prefix " << nameToCheck << " in NameLSA from " << destRouterName
+                        << ", isServiceFunction=" << isServiceFunction);
+          break;
+        }
+      }
+      if (isServiceFunction) {
+        break;
+      }
+    }
+  }
+  
+  if (!isServiceFunction) {
+    NLSR_LOG_DEBUG("adjustNexthopCosts: " << nameToCheck << " is not a service function, returning original NextHopList");
+    return nhlist;
+  }
+  
+  NLSR_LOG_DEBUG("adjustNexthopCosts called: nameToCheck=" << nameToCheck << " (service function)");
+  
+  // 同じFaceUriでも異なるdestRouterNameのNextHopを区別するため、
+  // FaceUriとdestRouterNameのペアをキーとして使用
+  // (FaceUri, destRouterName) -> (NextHop, functionCost)
+  std::map<std::pair<ndn::FaceUri, ndn::Name>, std::pair<NextHop, double>> nextHopMap;
   
   // 各RoutingTablePoolEntryに対して個別にFunctionCostを計算
   // これにより、各NextHopがどのdestRouterNameに対応するかを正確に判断できる
@@ -280,9 +312,49 @@ NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& 
                     << ", adjustedCost=" << adjustedCost);
       
       const NextHop newNextHop = NextHop(nh.getConnectingFaceUri(), adjustedCost);
-      new_nhList.addNextHop(newNextHop);
+      const ndn::FaceUri& faceUri = nh.getConnectingFaceUri();
+      
+      // (FaceUri, destRouterName)のペアをキーとして使用
+      auto key = std::make_pair(faceUri, destRouterName);
+      auto it = nextHopMap.find(key);
+      
+      if (it == nextHopMap.end()) {
+        // 新しいNextHopを追加（同じFaceUriでも異なるdestRouterNameなら別エントリとして保持）
+        nextHopMap[key] = std::make_pair(newNextHop, functionCost);
+        NLSR_LOG_DEBUG("Added new NextHop: " << faceUri << " via " << destRouterName 
+                      << " with adjustedCost=" << adjustedCost 
+                      << ", functionCost=" << functionCost);
+      } else {
+        // 同じ(FaceUri, destRouterName)のペアが既に存在する場合、更新する
+        // これは、同じdestRouterNameからのNextHopが更新された場合を意味する
+        double existingFunctionCost = it->second.second;
+        double existingCost = it->second.first.getRouteCost();
+        
+        NLSR_LOG_DEBUG("Updating existing NextHop: " << faceUri << " via " << destRouterName 
+                      << ", existing: cost=" << existingCost << ", functionCost=" << existingFunctionCost
+                      << ", new: cost=" << adjustedCost << ", functionCost=" << functionCost);
+        
+        // 同じdestRouterNameからのNextHopなので、常に最新の値で更新
+        nextHopMap[key] = std::make_pair(newNextHop, functionCost);
+        NLSR_LOG_DEBUG("Updated NextHop: " << faceUri << " via " << destRouterName 
+                      << " with adjustedCost=" << adjustedCost);
+      }
     }
   }
+  
+  // マップからNexthopListを構築
+  // 同じFaceUriでも異なるdestRouterNameのNextHopは両方とも保持される
+  NexthopList new_nhList;
+  for (const auto& [key, pair] : nextHopMap) {
+    const auto& [faceUri, destRouterName] = key;
+    new_nhList.addNextHop(pair.first);
+    NLSR_LOG_DEBUG("Final NextHop added to list: " << faceUri 
+                  << " via " << destRouterName
+                  << " with cost=" << pair.first.getRouteCost() 
+                  << ", functionCost=" << pair.second);
+  }
+  
+  NLSR_LOG_DEBUG("adjustNexthopCosts returning NexthopList with " << new_nhList.size() << " entries");
   
   return new_nhList;
 }

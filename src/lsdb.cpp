@@ -95,6 +95,23 @@ Lsdb::buildAndInstallOwnNameLsa()
   NameLsa nameLsa(m_thisRouterPrefix, m_sequencingManager.getNameLsaSeq() + 1,
                   getLsaExpirationTimePoint(), m_confParam.getNamePrefixList());
   
+  // Set isServiceFunction flag for each prefix based on configuration
+  // Get all prefix info and update flags
+  auto& npl = nameLsa.getNpl();
+  for (const auto& prefixInfo : npl.getPrefixInfo()) {
+    const ndn::Name& prefixName = prefixInfo.getName();
+    bool isServiceFunction = m_confParam.isServiceFunctionPrefix(prefixName);
+    
+    if (isServiceFunction) {
+      // Remove existing prefix info and re-add with flag set
+      nameLsa.removeName(prefixInfo);
+      PrefixInfo newPrefixInfo(prefixName, prefixInfo.getCost());
+      newPrefixInfo.setIsServiceFunction(true);
+      nameLsa.addName(newPrefixInfo);
+      NLSR_LOG_DEBUG("Set isServiceFunction=true for prefix: " << prefixName);
+    }
+  }
+  
   // Preserve Service Function information from existing NameLSA
   auto existingNameLsa = findLsa<NameLsa>(m_thisRouterPrefix);
   if (existingNameLsa) {

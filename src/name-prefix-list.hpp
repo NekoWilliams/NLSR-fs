@@ -68,6 +68,17 @@ public:
     return m_prefixCost;
   }
 
+  bool isServiceFunction() const
+  {
+    return m_isServiceFunction;
+  }
+
+  void setIsServiceFunction(bool isServiceFunction)
+  {
+    m_wire.reset();
+    m_isServiceFunction = isServiceFunction;
+  }
+
   template<ndn::encoding::Tag TAG>
   size_t
   wireEncode(ndn::EncodingImpl<TAG>& block) const;
@@ -82,7 +93,9 @@ private:
   friend bool
   operator==(const PrefixInfo& lhs, const PrefixInfo& rhs)
   {
-    return (lhs.getName() == rhs.getName()) && (lhs.getCost() == rhs.getCost());
+    return (lhs.getName() == rhs.getName()) && 
+           (lhs.getCost() == rhs.getCost()) &&
+           (lhs.isServiceFunction() == rhs.isServiceFunction());
   }
 
   friend std::ostream&
@@ -95,6 +108,7 @@ private:
 private:
   ndn::Name m_prefixName;
   double m_prefixCost;
+  bool m_isServiceFunction = false;  // デフォルトはfalse（後方互換性のため）
 
   mutable ndn::Block m_wire;
 };

@@ -88,7 +88,8 @@ NamePrefixList::getPrefixInfo() const
 {
   std::list<PrefixInfo> nameCosts;
   for (const auto& [name, soucePrefixInfo] : m_namesSources) {
-    nameCosts.emplace_back(name, soucePrefixInfo.costObj.getCost());
+    // PrefixInfoをコピーして返す（isServiceFunctionフラグも含む）
+    nameCosts.push_back(soucePrefixInfo.costObj);
   }
   return nameCosts;
 }
@@ -125,6 +126,15 @@ size_t
 PrefixInfo::wireEncode(ndn::EncodingImpl<TAG>& encoder) const
 {
   size_t totalLength = 0;
+
+  // IsServiceFunctionフラグをエンコード（オプショナル、trueの場合のみ）
+  if (m_isServiceFunction) {
+    // Booleanは1バイト（0または1）
+    uint8_t value = 1;
+    totalLength += encoder.prependByte(value);
+    totalLength += encoder.prependVarNumber(1);
+    totalLength += encoder.prependVarNumber(nlsr::tlv::IsServiceFunction);
+  }
 
   totalLength += prependDoubleBlock(encoder, nlsr::tlv::Cost, m_prefixCost);
 
@@ -167,6 +177,9 @@ PrefixInfo::wireDecode(const ndn::Block& wire)
 
   m_wire.parse();
 
+  // デフォルト値を設定
+  m_isServiceFunction = false;
+
   auto val = m_wire.elements_begin();
 
   if (val != m_wire.elements_end() && val->type() == ndn::tlv::Name) {
@@ -183,6 +196,14 @@ PrefixInfo::wireDecode(const ndn::Block& wire)
   }
   else {
     NDN_THROW(Error("Missing required Cost field"));
+  }
+
+  // IsServiceFunctionフラグをデコード（オプショナル）
+  if (val != m_wire.elements_end() && val->type() == nlsr::tlv::IsServiceFunction) {
+    if (val->value_size() == 1) {
+      uint8_t value = *val->value();
+      m_isServiceFunction = (value != 0);
+    }
   }
 }
 

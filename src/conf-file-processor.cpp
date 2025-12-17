@@ -753,10 +753,11 @@ ConfFileProcessor::processConfSectionServiceFunction(const ConfigSection& sectio
     }
   }
   
-  // If no function-prefix was specified, add default /relay for backward compatibility
+  // If no function-prefix was specified, service function routing will be disabled
+  // (no default prefix is added to avoid hardcoding environment-specific prefixes)
   if (!foundFunctionPrefix) {
-    m_confParam.addServiceFunctionPrefix(ndn::Name("/relay"));
-    std::cerr << "No function-prefix specified, using default: /relay" << std::endl;
+    std::cerr << "No function-prefix specified in service-function section. "
+              << "Service function routing will be disabled." << std::endl;
   }
   
   // Debug: Print all registered prefixes

@@ -55,7 +55,8 @@ enum {
   ServiceFunction           = 152,
   ProcessingWeight          = 153,
   LoadWeight                = 154,
-  UsageWeight               = 155
+  UsageWeight               = 155,
+  IsServiceFunction         = 156
 };
 
 } // namespace nlsr::tlv
