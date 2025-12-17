@@ -22,6 +22,7 @@
 #include "name-prefix-list.hpp"
 #include "common.hpp"
 #include "tlv-nlsr.hpp"
+#include <ndn-cxx/util/span.hpp>
 
 namespace nlsr {
 
@@ -131,7 +132,8 @@ PrefixInfo::wireEncode(ndn::EncodingImpl<TAG>& encoder) const
   if (m_isServiceFunction) {
     // Booleanは1バイト（0または1）
     uint8_t value = 1;
-    totalLength += encoder.prependByte(value);
+    ndn::span<const uint8_t> bytes(&value, 1);
+    totalLength += encoder.prependBytes(bytes);
     totalLength += encoder.prependVarNumber(1);
     totalLength += encoder.prependVarNumber(nlsr::tlv::IsServiceFunction);
   }
