@@ -254,11 +254,11 @@ NameLsa::wireDecode(const ndn::Block& wire)
                          << sizeof(double) << ", got " << it->value_size());
           }
         }
-        else if (it->type() == nlsr::tlv::ProcessingTime) {
-          // 後方互換性: 旧ProcessingTime TLVタイプ（番号148）もサポート
+        else if (it->type() == 148) {
+          // 後方互換性: 旧ProcessingTime TLVタイプ（番号148、現在はUtilization）もサポート
           if (it->value_size() == sizeof(double)) {
             std::memcpy(&sfInfo.utilization, it->value(), sizeof(double));
-            NLSR_LOG_DEBUG("wireDecode: Decoded Utilization (from old ProcessingTime TLV): " << sfInfo.utilization 
+            NLSR_LOG_DEBUG("wireDecode: Decoded Utilization (from old ProcessingTime TLV type 148): " << sfInfo.utilization 
                           << " (value_size=" << it->value_size() << ")");
           }
         }
