@@ -254,7 +254,7 @@ NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& 
       if (sfInfo.lastUpdateTime != ndn::time::system_clock::time_point::min()) {
         auto now = ndn::time::system_clock::now();
         auto timeSinceLastUpdate = boost::chrono::duration_cast<boost::chrono::seconds>(now - sfInfo.lastUpdateTime).count();
-        uint32_t staleThreshold = m_confParam.getUtilizationWindowSeconds() * 2;  // 2x window duration
+        uint32_t staleThreshold = m_confParam.getUtilizationWindowSeconds() * 3;  // 3x window duration (180 seconds if window is 60s)
         
         if (timeSinceLastUpdate > static_cast<int64_t>(staleThreshold)) {
           isStale = true;
