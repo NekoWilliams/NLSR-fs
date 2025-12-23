@@ -708,7 +708,7 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo() const
   ServiceFunctionInfo info;
   
   // Initialize with default values
-  info.processingTime = 0.0;  // Now stores utilization (0.0 ~ 1.0)
+  info.utilization = 0.0;  // 利用率（0.0 ~ 1.0）
   info.load = 0.0;
   info.usageCount = 0;
   info.lastUpdateTime = ndn::time::system_clock::now();
@@ -806,22 +806,22 @@ SidecarStatsHandler::convertStatsToServiceFunctionInfo() const
   }
   
   // Check if the latest entry is too old (more than windowSeconds * 2 ago)
-  // If so, set processingTime to 0
+  // If so, set utilization to 0
   auto now = ndn::time::system_clock::now();
   auto timeSinceLastUpdate = boost::chrono::duration_cast<boost::chrono::seconds>(now - latestTimestamp).count();
   uint32_t staleThreshold = windowSeconds * 2;  // Consider stale if older than 2x window
   
   if (timeSinceLastUpdate > static_cast<int64_t>(staleThreshold)) {
     NLSR_LOG_DEBUG("Latest entry is too old (" << timeSinceLastUpdate << "s ago, threshold: " << staleThreshold 
-                  << "s), setting processingTime to 0");
-    info.processingTime = 0.0;
+                  << "s), setting utilization to 0");
+    info.utilization = 0.0;
     return info;
   }
   
   // Calculate utilization
-  info.processingTime = calculateUtilization(entries, windowSeconds);
+  info.utilization = calculateUtilization(entries, windowSeconds);
   
-  NLSR_LOG_DEBUG("ServiceFunctionInfo: utilization=" << info.processingTime 
+  NLSR_LOG_DEBUG("ServiceFunctionInfo: utilization=" << info.utilization 
                  << " (calculated from " << entries.size() << " entries, lastUpdateTime: " 
                  << boost::chrono::duration_cast<boost::chrono::seconds>(latestTimestamp.time_since_epoch()).count() << ")");
   
@@ -835,8 +835,9 @@ SidecarStatsHandler::getServiceFunctionPrefix() const
   if (m_confParam) {
     return m_confParam->getServiceFunctionPrefix();
   }
-  // Fallback to default if ConfParameter is not available
-  return ndn::Name("/relay");
+  // Return empty Name if ConfParameter is not available
+  // (no hardcoded default to maintain extensibility)
+  return ndn::Name();
 }
 
 void
@@ -854,7 +855,7 @@ SidecarStatsHandler::updateNameLsaWithStats()
     NLSR_LOG_DEBUG("Converting stats to ServiceFunctionInfo (utilization-based)...");
     ServiceFunctionInfo sfInfo = convertStatsToServiceFunctionInfo();
     
-    NLSR_LOG_DEBUG("ServiceFunctionInfo: processingTime=" << sfInfo.processingTime 
+    NLSR_LOG_DEBUG("ServiceFunctionInfo: utilization=" << sfInfo.utilization 
                    << ", load=" << sfInfo.load 
                    << ", usageCount=" << sfInfo.usageCount);
     
@@ -882,7 +883,7 @@ SidecarStatsHandler::updateNameLsaWithStats()
     m_lsdb->buildAndInstallOwnNameLsa();
     
     NLSR_LOG_INFO("Updated NameLSA with Service Function info: prefix=" << servicePrefix
-                  << ", processingTime=" << sfInfo.processingTime
+                  << ", utilization=" << sfInfo.utilization
                   << ", load=" << sfInfo.load
                   << ", usageCount=" << sfInfo.usageCount);
   }

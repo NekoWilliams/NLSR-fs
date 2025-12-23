@@ -288,7 +288,7 @@ simulateOneNeighbor(AdjMatrix& matrix, int sourceRouter, const Link& accessibleN
 // is now calculated and applied in NamePrefixTable::adjustNexthopCosts
 // instead of during router-to-router path calculation.
 // This change allows FunctionCost to be applied only to specific service
-// function prefixes (e.g., /relay) rather than all router-to-router paths.
+// service function prefixes (configured via function-prefix) rather than all router-to-router paths.
 
 /**
  * @brief Compute the shortest path from a source router to every other router.
@@ -326,7 +326,7 @@ calculateDijkstraPath(const AdjMatrix& matrix, int sourceRouter,
     for (size_t v = 0; v < nRouters; ++v) {
       if (matrix[u][v] >= 0 && isNotExplored(q, v, start + 1)) {
         double linkCost = matrix[u][v];
-        // FunctionCost is now applied to /relay prefix cost in NamePrefixTable::adjustNexthopCosts
+        // FunctionCost is now applied to service function prefix cost in NamePrefixTable::adjustNexthopCosts
         // No longer applying FunctionCost to router-to-router path cost
         double functionCost = 0.0;
         

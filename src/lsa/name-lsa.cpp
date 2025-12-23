@@ -85,7 +85,7 @@ NameLsa::getServiceFunctionInfo(const ndn::Name& name) const
   
   // Debug: Print all entries in the map
   for (const auto& [mapName, info] : m_serviceFunctionInfo) {
-    NLSR_LOG_DEBUG("  Map entry: " << mapName << " -> processingTime=" << info.processingTime
+    NLSR_LOG_DEBUG("  Map entry: " << mapName << " -> utilization=" << info.utilization
                   << ", load=" << info.load << ", usageCount=" << info.usageCount
                   << ", processingWeight=" << info.processingWeight
                   << ", loadWeight=" << info.loadWeight
@@ -94,7 +94,7 @@ NameLsa::getServiceFunctionInfo(const ndn::Name& name) const
   
   auto it = m_serviceFunctionInfo.find(name);
   if (it != m_serviceFunctionInfo.end()) {
-    NLSR_LOG_DEBUG("Service Function info found for " << name << ": processingTime=" << it->second.processingTime
+    NLSR_LOG_DEBUG("Service Function info found for " << name << ": utilization=" << it->second.utilization
                   << ", load=" << it->second.load << ", usageCount=" << it->second.usageCount
                   << ", processingWeight=" << it->second.processingWeight
                   << ", loadWeight=" << it->second.loadWeight
@@ -116,7 +116,7 @@ NameLsa::wireEncode(ndn::EncodingImpl<TAG>& block) const
   NLSR_LOG_DEBUG("wireEncode: Encoding " << m_serviceFunctionInfo.size() << " Service Function info entries");
   for (const auto& [name, info] : m_serviceFunctionInfo) {
     NLSR_LOG_DEBUG("wireEncode: Encoding Service Function: " << name 
-                  << ", processingTime=" << info.processingTime
+                  << ", utilization=" << info.utilization
                   << ", load=" << info.load << ", usageCount=" << info.usageCount
                   << ", processingWeight=" << info.processingWeight
                   << ", loadWeight=" << info.loadWeight
@@ -128,7 +128,7 @@ NameLsa::wireEncode(ndn::EncodingImpl<TAG>& block) const
     sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::UsageWeight, info.usageWeight);
     sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::LoadWeight, info.loadWeight);
     sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::ProcessingWeight, info.processingWeight);
-    sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::ProcessingTime, info.processingTime);
+    sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::Utilization, info.utilization);
     sfInfoLength += nlsrPrependDoubleBlock(block, nlsr::tlv::Load, info.load);
     sfInfoLength += block.prependVarNumber(info.usageCount);
     sfInfoLength += block.prependVarNumber(nlsr::tlv::UsageCount);
@@ -218,7 +218,7 @@ NameLsa::wireDecode(const ndn::Block& wire)
       ServiceFunctionInfo sfInfo;
       
       // Initialize with default values
-      sfInfo.processingTime = 0.0;
+      sfInfo.utilization = 0.0;
       sfInfo.load = 0.0;
       sfInfo.usageCount = 0;
       sfInfo.lastUpdateTime = ndn::time::system_clock::now();
@@ -243,15 +243,23 @@ NameLsa::wireDecode(const ndn::Block& wire)
           serviceName.wireDecode(*it);
           NLSR_LOG_DEBUG("wireDecode: Decoded Service Function name: " << serviceName);
         }
-        else if (it->type() == nlsr::tlv::ProcessingTime) {
-          // Processing time (double) - 8 bytes
+        else if (it->type() == nlsr::tlv::Utilization) {
+          // Utilization (double) - 8 bytes (旧ProcessingTime、後方互換性のため番号は変更なし)
           if (it->value_size() == sizeof(double)) {
-            std::memcpy(&sfInfo.processingTime, it->value(), sizeof(double));
-            NLSR_LOG_DEBUG("wireDecode: Decoded ProcessingTime: " << sfInfo.processingTime 
+            std::memcpy(&sfInfo.utilization, it->value(), sizeof(double));
+            NLSR_LOG_DEBUG("wireDecode: Decoded Utilization: " << sfInfo.utilization 
                           << " (value_size=" << it->value_size() << ")");
           } else {
-            NLSR_LOG_WARN("wireDecode: ProcessingTime value_size mismatch: expected " 
+            NLSR_LOG_WARN("wireDecode: Utilization value_size mismatch: expected " 
                          << sizeof(double) << ", got " << it->value_size());
+          }
+        }
+        else if (it->type() == nlsr::tlv::ProcessingTime) {
+          // 後方互換性: 旧ProcessingTime TLVタイプ（番号148）もサポート
+          if (it->value_size() == sizeof(double)) {
+            std::memcpy(&sfInfo.utilization, it->value(), sizeof(double));
+            NLSR_LOG_DEBUG("wireDecode: Decoded Utilization (from old ProcessingTime TLV): " << sfInfo.utilization 
+                          << " (value_size=" << it->value_size() << ")");
           }
         }
         else if (it->type() == nlsr::tlv::Load) {
@@ -323,7 +331,7 @@ NameLsa::wireDecode(const ndn::Block& wire)
         m_serviceFunctionInfo[serviceName] = sfInfo;
         serviceFunctionCount++;
         NLSR_LOG_DEBUG("wireDecode: Stored Service Function info: " << serviceName 
-                      << " -> processingTime=" << sfInfo.processingTime
+                      << " -> utilization=" << sfInfo.utilization
                       << ", load=" << sfInfo.load << ", usageCount=" << sfInfo.usageCount
                       << ", processingWeight=" << sfInfo.processingWeight
                       << ", loadWeight=" << sfInfo.loadWeight
@@ -342,7 +350,7 @@ NameLsa::wireDecode(const ndn::Block& wire)
   NLSR_LOG_DEBUG("wireDecode: Completed decode. Service Function info entries: " << m_serviceFunctionInfo.size());
   for (const auto& [name, info] : m_serviceFunctionInfo) {
     NLSR_LOG_DEBUG("wireDecode: Final Service Function info: " << name 
-                  << " -> processingTime=" << info.processingTime
+                  << " -> utilization=" << info.utilization
                   << ", load=" << info.load << ", usageCount=" << info.usageCount
                   << ", processingWeight=" << info.processingWeight
                   << ", loadWeight=" << info.loadWeight
@@ -397,7 +405,7 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
   
   for (const auto& [serviceName, newSfInfo] : nlsa->m_serviceFunctionInfo) {
     NLSR_LOG_DEBUG("NameLsa::update: Processing Service Function info for " << serviceName.toUri()
-                  << ": processingTime=" << newSfInfo.processingTime
+                  << ": utilization=" << newSfInfo.utilization
                   << ", processingWeight=" << newSfInfo.processingWeight);
     auto it = m_serviceFunctionInfo.find(serviceName);
     if (it == m_serviceFunctionInfo.end()) {
@@ -408,7 +416,7 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
     } else {
       // Check if Service Function information has changed
       const auto& oldSfInfo = it->second;
-      if (oldSfInfo.processingTime != newSfInfo.processingTime ||
+      if (oldSfInfo.utilization != newSfInfo.utilization ||
           oldSfInfo.load != newSfInfo.load ||
           oldSfInfo.usageCount != newSfInfo.usageCount ||
           oldSfInfo.processingWeight != newSfInfo.processingWeight ||
@@ -417,7 +425,7 @@ NameLsa::update(const std::shared_ptr<Lsa>& lsa)
         m_serviceFunctionInfo[serviceName] = newSfInfo;
         updated = true;
         NLSR_LOG_DEBUG("Service Function info updated for " << serviceName.toUri()
-                      << ": processingTime=" << newSfInfo.processingTime
+                      << ": utilization=" << newSfInfo.utilization
                       << ", load=" << newSfInfo.load
                       << ", usageCount=" << newSfInfo.usageCount
                       << ", processingWeight=" << newSfInfo.processingWeight);

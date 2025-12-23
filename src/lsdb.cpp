@@ -123,7 +123,7 @@ Lsdb::buildAndInstallOwnNameLsa()
       // This ensures that recently updated information is preserved
       nameLsa.setServiceFunctionInfo(serviceName, sfInfo);
       NLSR_LOG_DEBUG("Preserved Service Function info for " << serviceName.toUri()
-                    << ": processingTime=" << sfInfo.processingTime
+                    << ": utilization=" << sfInfo.utilization
                     << ", load=" << sfInfo.load
                     << ", usageCount=" << sfInfo.usageCount);
     }
@@ -330,7 +330,7 @@ Lsdb::installLsa(std::shared_ptr<Lsa> lsa)
       const auto& allSfInfo = updatedNlsa->getAllServiceFunctionInfo();
       for (const auto& [serviceName, sfInfo] : allSfInfo) {
         NLSR_LOG_DEBUG("installLsa: Updated Service Function info: " << serviceName.toUri()
-                      << " -> processingTime=" << sfInfo.processingTime
+                      << " -> utilization=" << sfInfo.utilization
                       << ", processingWeight=" << sfInfo.processingWeight);
       }
     }

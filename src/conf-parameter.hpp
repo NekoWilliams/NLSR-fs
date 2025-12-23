@@ -586,14 +586,15 @@ public:
     return m_serviceFunctionPrefixes;
   }
 
-  // Backward compatibility: get first service function prefix (or default /relay)
+  // Get first service function prefix from configuration
+  // Returns empty Name if no prefix is configured (no hardcoded default)
   ndn::Name
   getServiceFunctionPrefix() const
   {
     if (!m_serviceFunctionPrefixes.empty()) {
       return *m_serviceFunctionPrefixes.begin();
     }
-    return ndn::Name("/relay");  // Default for backward compatibility
+    return ndn::Name();  // Empty Name if not configured (requires explicit configuration)
   }
 
 PUBLIC_WITH_TESTS_ELSE_PRIVATE:

@@ -121,10 +121,10 @@ NamePrefixTable::updateFromLsdb(std::shared_ptr<Lsa> lsa, LsdbUpdate updateType,
     const auto& allSfInfo = nlsa->getAllServiceFunctionInfo();
     bool hasSfInfo = false;
     for (const auto& [serviceName, sfInfo] : allSfInfo) {
-      if (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {
+      if (sfInfo.utilization > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0) {
         hasSfInfo = true;
         NLSR_LOG_DEBUG("updateFromLsdb: Service Function info found for " << serviceName.toUri()
-                      << ": processingTime=" << sfInfo.processingTime
+                      << ": utilization=" << sfInfo.utilization
                       << ", load=" << sfInfo.load
                       << ", usageCount=" << sfInfo.usageCount);
       }
@@ -235,14 +235,14 @@ NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& 
       const auto& allSfInfo = nameLsa->getAllServiceFunctionInfo();
       for (const auto& [sfName, sfInfo] : allSfInfo) {
         NLSR_LOG_DEBUG("NameLSA contains Service Function: " << sfName.toUri()
-                      << " -> processingTime=" << sfInfo.processingTime
+                      << " -> utilization=" << sfInfo.utilization
                       << ", processingWeight=" << sfInfo.processingWeight);
       }
       
       ServiceFunctionInfo sfInfo = nameLsa->getServiceFunctionInfo(nameToCheck);
       
       NLSR_LOG_DEBUG("ServiceFunctionInfo for " << nameToCheck << " (destRouterName=" << destRouterName 
-                    << "): processingTime=" << sfInfo.processingTime
+                    << "): utilization=" << sfInfo.utilization
                     << ", load=" << sfInfo.load << ", usageCount=" << sfInfo.usageCount
                     << ", processingWeight=" << sfInfo.processingWeight
                     << ", loadWeight=" << sfInfo.loadWeight
@@ -268,7 +268,7 @@ NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& 
       // NameLSAにService Function情報が存在する場合、そのプレフィックスはサービスファンクションと判断
       // weight情報は、サービスファンクションを持つノード（destRouterName）の設定ファイルから取得
       // NameLSAに含まれるweight情報を使用する
-      if (!isStale && (sfInfo.processingTime > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0)) {
+      if (!isStale && (sfInfo.utilization > 0.0 || sfInfo.load > 0.0 || sfInfo.usageCount > 0)) {
         NLSR_LOG_DEBUG("Service Function info found in NameLSA for " << nameToCheck 
                       << " (destRouterName=" << destRouterName << "), calculating FunctionCost");
         
@@ -280,12 +280,12 @@ NamePrefixTable::adjustNexthopCosts(const NexthopList& nhlist, const ndn::Name& 
         NLSR_LOG_DEBUG("Weights from NameLSA (node " << destRouterName << "): processing=" << processingWeight 
                       << ", load=" << loadWeight << ", usage=" << usageWeight);
         
-        functionCost = sfInfo.processingTime * processingWeight +
+        functionCost = sfInfo.utilization * processingWeight +
                       sfInfo.load * loadWeight +
                       (sfInfo.usageCount / 100.0) * usageWeight;
         
         NLSR_LOG_DEBUG("FunctionCost calculated for " << nameToCheck << " prefix to " << destRouterName 
-                      << ": processingTime=" << sfInfo.processingTime 
+                      << ": utilization=" << sfInfo.utilization 
                       << ", functionCost=" << functionCost);
       } else if (isStale) {
         NLSR_LOG_DEBUG("Service Function info is stale for " << nameToCheck 

@@ -48,7 +48,7 @@ enum {
   RoutingTableEntry           = 145,
   PrefixInfo                  = 146,
   ServiceFunctionInfo         = 147,
-  ProcessingTime             = 148,
+  Utilization                = 148,  // 利用率（旧ProcessingTime、後方互換性のため番号は変更なし）
   Load                      = 149,
   UsageCount                = 150,
   LastUpdateTime            = 151,
